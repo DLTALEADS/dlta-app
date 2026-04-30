@@ -226,6 +226,7 @@ function showError(msg) {
 }
 
 function loadLeads() {
+  if (!API_KEY) { checkApiKey(); return; }
   document.getElementById('leadList').innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading leads...</div></div>';
   var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(SHEET_NAME) + '?key=' + API_KEY;
   fetch(url)
