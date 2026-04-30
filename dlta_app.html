@@ -276,31 +276,14 @@ function loadLeads() {
     });
 }
 
+var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHDX2GDqaGggMrXRSRntfBlsTCiOtRe1IHsEcSX2kr7XjagcE5IQJSZ1KPbJzFEc5-/exec';
+
 function saveToSheet(row, updates) {
-  // Build batch update request
-  var requests = [];
-  fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(SHEET_NAME) + '!A1:BT1?key=' + API_KEY)
-    .then(function(r) { return r.json(); })
-    .then(function(data) {
-      var headers = data.values ? data.values[0] : [];
-      var keys = Object.keys(updates);
-      var batchData = [];
-      for (var i = 0; i < keys.length; i++) {
-        var col = headers.indexOf(keys[i]);
-        if (col >= 0) {
-          var colLetter = colToLetter(col + 1);
-          batchData.push({
-            range: SHEET_NAME + '!' + colLetter + row,
-            values: [[updates[keys[i]]]]
-          });
-        }
-      }
-      return fetch('https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values:batchUpdate?key=' + API_KEY, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ valueInputOption: 'RAW', data: batchData })
-      });
-    })
+  var params = new URLSearchParams();
+  params.append('action', 'update');
+  params.append('row', row);
+  params.append('updates', JSON.stringify(updates));
+  fetch(APPS_SCRIPT_URL + '?' + params.toString())
     .catch(function(e) { console.error('Save error:', e); });
 }
 
