@@ -49,6 +49,13 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .pill-dnc { background: #1a0808; color: var(--red); border: 1px solid var(--red); }
 .pill-listed { background: #1a0a1f; color: #a855f7; border: 1px solid #a855f7; }
 .followup-tag { font-size: 11px; color: var(--yellow); }
+.auction-tag { font-size: 11px; color: #f87171; font-weight: 700; background: #1a0808; border: 1px solid #7f1d1d; border-radius: 8px; padding: 2px 7px; }
+.auction-tag.soon { color: #fbbf24; background: #1a1200; border-color: #d97706; }
+.nos-info { background: #0d1a0d; border: 1px solid #16a34a22; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap; }
+.nos-field { display: flex; flex-direction: column; gap: 2px; }
+.nos-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+.nos-value { font-size: 15px; font-weight: 800; color: #4ade80; }
+.nos-value.urgent { color: #f87171; }
 .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
 .dot-new { background: var(--accent); }
 .dot-called { background: #555; }
@@ -266,7 +273,10 @@ function loadLeads() {
           followUp: String(r.follow_up_date || '').split('T')[0],
           nextAction: String(r.next_action || ''),
           source: String(r.source || ''),
-          leadType: String(r.lead_type || '')
+          leadType: String(r.lead_type || ''),
+          saleDate: String(r.sale_date || ''),
+          publishDate: String(r.publish_date || ''),
+          minBid: String(r.min_bid || '')
         });
       }
       renderTabs();
@@ -349,11 +359,19 @@ function renderList() {
       chips += '<span class="chip ' + (p.dnc ? 'dnc' : '') + '">' + fmt(p.number) + '</span>';
     }
     var fu = l.followUp ? '<span class="followup-tag">📅 ' + l.followUp + '</span>' : '';
+    var auctionTag = '';
+    if (l.saleDate) {
+      var saleParts = l.saleDate.split('/');
+      var saleTs = saleParts.length === 3 ? new Date(saleParts[2], saleParts[0]-1, saleParts[1]).getTime() : 0;
+      var daysOut = saleTs ? Math.ceil((saleTs - Date.now()) / 86400000) : 999;
+      var tagClass = daysOut <= 14 ? 'auction-tag soon' : 'auction-tag';
+      auctionTag = '<span class="' + tagClass + '">🔨 ' + l.saleDate + (daysOut <= 14 ? ' (' + daysOut + 'd)' : '') + '</span>';
+    }
     var dimmed = l.status === 'notinterested' || l.status === 'dnc';
     html += '<div class="lead-card ' + (dimmed ? 'dimmed' : '') + '" onclick="openDetail(' + l.row + ')">';
     html += '<div class="lead-name"><div class="dot ' + (DOT[l.status] || 'dot-new') + '"></div>' + l.name + '</div>';
     html += '<div class="lead-meta">' + l.address + ', ' + l.city + ' ' + l.zip + '</div>';
-    html += '<div class="lead-footer"><span class="status-pill ' + (PILL[l.status] || 'pill-new') + '">' + (PILL_LABEL[l.status] || 'New') + '</span>' + chips + fu + '</div>';
+    html += '<div class="lead-footer"><span class="status-pill ' + (PILL[l.status] || 'pill-new') + '">' + (PILL_LABEL[l.status] || 'New') + '</span>' + chips + fu + auctionTag + '</div>';
     html += '</div>';
   }
   document.getElementById('leadList').innerHTML = html;
@@ -428,6 +446,17 @@ function renderDetail() {
   var html = '';
   html += '<div class="detail-name">' + l.name + '</div>';
   html += '<div class="detail-addr">' + l.address + '<br>' + l.city + ', ' + l.state + ' ' + l.zip + '<br><small style="color:var(--muted)">' + l.leadType + ' · ' + l.source + '</small></div>';
+  if (l.saleDate) {
+    var sp = l.saleDate.split('/');
+    var sts = sp.length === 3 ? new Date(sp[2], sp[0]-1, sp[1]).getTime() : 0;
+    var dOut = sts ? Math.ceil((sts - Date.now()) / 86400000) : 999;
+    var urgCls = dOut <= 14 ? 'nos-value urgent' : 'nos-value';
+    html += '<div class="nos-info">';
+    html += '<div class="nos-field"><div class="nos-label">🔨 Auction Date</div><div class="' + urgCls + '">' + l.saleDate + (dOut <= 60 ? ' · ' + dOut + ' days' : '') + '</div></div>';
+    if (l.publishDate) html += '<div class="nos-field"><div class="nos-label">📋 Published</div><div class="nos-value" style="color:var(--muted)">' + l.publishDate + '</div></div>';
+    if (l.minBid) html += '<div class="nos-field"><div class="nos-label">💰 Min Bid</div><div class="nos-value">$' + l.minBid + '</div></div>';
+    html += '</div>';
+  }
   html += '<div class="action-grid">';
   html += '<button class="action-btn btn-call" onclick="dial(\'' + callNum + '\')"><span class="icon">📞</span>Call</button>';
   html += '<button class="action-btn btn-text" onclick="sms(\'' + callNum + '\')"><span class="icon">💬</span>Text</button>';
