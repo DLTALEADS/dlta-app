@@ -139,7 +139,10 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
       <input class="search-input" id="searchInput" placeholder="Search name, address, zip..." oninput="renderList()">
       <button class="lookup-btn" onclick="openLookup()">📞 Lookup</button>
     </div>
-    <div class="tabs" id="tabBar"></div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
+      <div class="tabs" id="tabBar" style="flex:1;margin-bottom:0"></div>
+      <button id="sortBtn" onclick="toggleSaleSort()" style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🔨 Sale Date</button>
+    </div>
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
   </div>
   <div class="list">
@@ -176,12 +179,15 @@ var PILL = { new:'pill-new', called:'pill-called', callback:'pill-callback', app
 var PILL_LABEL = { new:'New', called:'Called', callback:'Callback', appointment:'Appt Set', notinterested:'Not Int.', dnc:'DNC', listed:'Listed' };
 var TABS = [
   { key:'all', label:'All' },
+  { key:'nos', label:'🔨 NOS' },
+  { key:'lp', label:'⚖️ LP' },
   { key:'new', label:'🔵 New' },
   { key:'callback', label:'🔁 Callbacks' },
   { key:'appointment', label:'📅 Appts' },
   { key:'called', label:'📞 Called' },
   { key:'listed', label:'🏠 Listed' }
 ];
+var sortMode = 'default'; // 'default' or 'saledate'
 var STATUSES = [
   {key:'new',label:'🔵 New'},
   {key:'called',label:'📞 Called'},
@@ -276,7 +282,8 @@ function loadLeads() {
           leadType: String(r.lead_type || ''),
           saleDate: String(r.sale_date || ''),
           publishDate: String(r.publish_date || ''),
-          minBid: String(r.min_bid || '')
+          minBid: String(r.min_bid || ''),
+          leadCategory: String(r.lead_type || '').toUpperCase()
         });
       }
       renderTabs();
@@ -325,12 +332,21 @@ function renderTabs() {
 
 function setTab(key) { activeTab = key; renderTabs(); renderList(); }
 
+function toggleSaleSort() {
+  sortMode = sortMode === 'saledate' ? 'default' : 'saledate';
+  renderList();
+  var btn = document.getElementById('sortBtn');
+  if (btn) btn.style.background = sortMode === 'saledate' ? 'var(--red)' : 'var(--card)';
+}
+
 function renderList() {
   var q = document.getElementById('searchInput').value.toLowerCase();
   var filtered = [];
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
-    if (activeTab !== 'all' && l.status !== activeTab) continue;
+    if (activeTab === 'nos' && l.leadCategory !== 'NOS') continue;
+    if (activeTab === 'lp' && l.leadCategory !== 'LP') continue;
+    if (activeTab !== 'all' && activeTab !== 'nos' && activeTab !== 'lp' && l.status !== activeTab) continue;
     if (q) {
       var hay = (l.name + ' ' + l.address + ' ' + l.city + ' ' + l.zip).toLowerCase();
       var phoneStr = '';
@@ -345,6 +361,17 @@ function renderList() {
   document.getElementById('calledCount').textContent = worked;
   document.getElementById('totalCount').textContent = leads.length;
   document.getElementById('progressFill').style.width = pct + '%';
+  // Sort by sale date if active
+  if (sortMode === 'saledate') {
+    filtered.sort(function(a, b) {
+      var parseDate = function(d) {
+        if (!d) return 99999999;
+        var p = d.split('/');
+        return p.length === 3 ? parseInt(p[2]+p[0]+p[1]) : 99999999;
+      };
+      return parseDate(a.saleDate) - parseDate(b.saleDate);
+    });
+  }
   document.getElementById('countLabel').textContent = filtered.length + ' lead' + (filtered.length !== 1 ? 's' : '');
   if (!filtered.length) {
     document.getElementById('leadList').innerHTML = '<div class="empty">No leads found</div>';
