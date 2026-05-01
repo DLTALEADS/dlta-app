@@ -249,7 +249,8 @@ function loadLeads() {
         for (var j = 1; j <= 5; j++) {
           var num = String(r['phone_' + j] || '').trim().replace(/\.0$/, '');
           var dnc = String(r['dnc_' + j] || '').toLowerCase() === 'true';
-          if (num && num !== '0') phones.push({ number: num, dnc: dnc });
+          var contact = String(r['contact_' + j] || '').trim();
+          if (num && num !== '0') phones.push({ number: num, dnc: dnc, contact: contact });
         }
         leads.push({
           row: i + 1,
@@ -394,10 +395,11 @@ function renderDetail() {
       var p = l.phones[i];
       phonesHtml += '<div class="phone-item ' + (p.dnc ? 'is-dnc' : '') + '">';
       phonesHtml += '<div><div class="phone-num">' + fmt(p.number) + (p.dnc ? '<span class="dnc-badge">DNC</span>' : '') + '</div>';
-      phonesHtml += '<div class="phone-sub">Phone ' + (i+1) + (p.dnc ? ' · Do Not Call' : '') + '</div></div>';
+      var contactLabel = p.contact || ('Phone ' + (i+1));
+      phonesHtml += '<div class="phone-sub">' + contactLabel + (p.dnc ? ' · DNC' : '') + '</div></div>';
       phonesHtml += '<div class="ph-btns">';
-      if (!p.dnc) phonesHtml += '<button class="ph-btn ph-call" onclick="dial(\'' + p.number + '\')">📞</button>';
-      if (!p.dnc) phonesHtml += '<button class="ph-btn ph-sms" onclick="sms(\'' + p.number + '\')">💬</button>';
+      phonesHtml += '<button class="ph-btn ph-call" onclick="dial(\'' + p.number + '\')">📞</button>';
+      phonesHtml += '<button class="ph-btn ph-sms" onclick="sms(\'' + p.number + '\')">💬</button>';
       phonesHtml += '</div></div>';
     }
   } else {
