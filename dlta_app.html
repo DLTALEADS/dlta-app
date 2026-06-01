@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>DLTA Lead System</title>
 <script>
-  var API_KEY = localStorage.getItem('dlta_api_key') || '';
+  var API_KEY = 'AIzaSyDQLMYtGXu2phBO3twCN7YdqZaccO64CKo';
   var SHEET_ID = '1MlrW2RAdykKJFBbiIeNBlCwct7oepW_mrybhS3U1Wqw';
   var SHEET_NAME = 'dlta-leads-formatted';
 </script>
@@ -51,6 +51,7 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .followup-tag { font-size: 11px; color: var(--yellow); }
 .auction-tag { font-size: 11px; color: #f87171; font-weight: 700; background: #1a0808; border: 1px solid #7f1d1d; border-radius: 8px; padding: 2px 7px; }
 .auction-tag.soon { color: #fbbf24; background: #1a1200; border-color: #d97706; }
+.text-sent-tag { font-size: 11px; color: #4ade80; background: #0a1f0a; border: 1px solid #16a34a44; border-radius: 8px; padding: 2px 7px; }
 .nos-info { background: #0d1a0d; border: 1px solid #16a34a22; border-radius: 12px; padding: 12px 14px; margin-bottom: 16px; display: flex; gap: 16px; flex-wrap: wrap; }
 .nos-field { display: flex; flex-direction: column; gap: 2px; }
 .nos-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
@@ -125,10 +126,12 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; }
 .modal-close { width: 100%; padding: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px; }
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 15px; }
+.sms-preview { background: var(--card); border: 1px solid var(--accent); border-radius: 12px; padding: 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; color: var(--text); }
+.sms-preview-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; }
 </style>
 </head>
 <body>
-
+ 
 <div id="listView">
   <div class="header">
     <div class="header-top">
@@ -150,7 +153,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <div id="leadList"><div class="loading"><div class="spinner"></div><div>Loading leads...</div></div></div>
   </div>
 </div>
-
+ 
 <div class="detail" id="detailView">
   <div class="detail-header">
     <button class="back-btn" onclick="closeDetail()">← Back</button>
@@ -158,7 +161,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
   <div class="detail-body" id="detailBody"></div>
 </div>
-
+ 
 <div class="modal" id="lookupModal">
   <div class="modal-box">
     <div class="modal-title">📞 Inbound Lookup</div>
@@ -167,13 +170,29 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <button class="modal-close" onclick="closeLookup()">Close</button>
   </div>
 </div>
-
+ 
+<!-- SMS Template Modal -->
+<div class="modal" id="smsModal">
+  <div class="modal-box">
+    <div class="modal-title">💬 Text Follow-Up</div>
+    <div class="sms-preview">
+      <div class="sms-preview-label">Message Preview</div>
+      <div id="smsPreviewText"></div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Review before sending. Tap Send to open iMessage with this pre-filled.</div>
+    <button class="save-btn" id="smsSendBtn" onclick="confirmSms()" style="margin-top:0">📱 Open iMessage</button>
+    <button class="modal-close" onclick="closeSmsModal()">Cancel</button>
+  </div>
+</div>
+ 
 <script>
 var leads = [];
 var activeTab = 'all';
 var currentId = null;
 var saving = false;
-
+var pendingSmsNum = '';
+var pendingSmsMsg = '';
+ 
 var DOT = { new:'dot-new', called:'dot-called', callback:'dot-callback', appointment:'dot-appointment', notinterested:'dot-notinterested', dnc:'dot-dnc', listed:'dot-listed' };
 var PILL = { new:'pill-new', called:'pill-called', callback:'pill-callback', appointment:'pill-appointment', notinterested:'pill-notinterested', dnc:'pill-dnc', listed:'pill-listed' };
 var PILL_LABEL = { new:'New', called:'Called', callback:'Callback', appointment:'Appt Set', notinterested:'Not Int.', dnc:'DNC', listed:'Listed' };
@@ -187,7 +206,7 @@ var TABS = [
   { key:'called', label:'📞 Called' },
   { key:'listed', label:'🏠 Listed' }
 ];
-var sortMode = 'default'; // 'default' or 'saledate'
+var sortMode = 'default';
 var STATUSES = [
   {key:'new',label:'🔵 New'},
   {key:'called',label:'📞 Called'},
@@ -197,7 +216,7 @@ var STATUSES = [
   {key:'dnc',label:'🚫 DNC'},
   {key:'listed',label:'🏠 Listed'}
 ];
-
+ 
 function normalizeStatus(raw) {
   if (!raw) return 'new';
   var s = String(raw).toLowerCase().trim();
@@ -210,36 +229,15 @@ function normalizeStatus(raw) {
   if (s === 'listed') return 'listed';
   return 'new';
 }
-
-function checkApiKey() {
-  if (!API_KEY) {
-    document.getElementById('leadList').innerHTML =
-      '<div class="error-box" style="margin:20px">' +
-      '<h3>🔑 Enter API Key</h3>' +
-      '<p style="margin-bottom:12px">Enter your Google Sheets API key to load leads. This is saved only on this device.</p>' +
-      '<input class="field-input" id="apiKeyInput" type="text" placeholder="AIzaSy..." style="margin-bottom:10px">' +
-      '<button class="save-btn" onclick="saveApiKey()">Save & Load Leads</button>' +
-      '</div>';
-    return false;
-  }
-  return true;
-}
-
-function saveApiKey() {
-  var key = document.getElementById('apiKeyInput').value.trim();
-  if (!key) return;
-  localStorage.setItem('dlta_api_key', key);
-  API_KEY = key;
-  loadLeads();
-}
-
+ 
+// API key baked in — no gate needed
+ 
 function showError(msg) {
   document.getElementById('leadList').innerHTML =
     '<div class="error-box"><h3>⚠️ Could Not Load Leads</h3><p>' + msg + '</p><button class="retry-btn" onclick="loadLeads()">Retry</button></div>';
 }
-
+ 
 function loadLeads() {
-  if (!API_KEY) { checkApiKey(); return; }
   document.getElementById('leadList').innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading leads...</div></div>';
   var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(SHEET_NAME) + '?key=' + API_KEY;
   fetch(url)
@@ -258,13 +256,18 @@ function loadLeads() {
         for (var j = 0; j < headers.length; j++) {
           r[headers[j]] = row[j] !== undefined ? row[j] : '';
         }
+ 
+        // ── PHONE PARSING — matches confirmed 45-column schema ──
+        // Schema: phone_1, phone_1_contact, phone_1_type, phone_1_dnc  (×5)
         var phones = [];
         for (var j = 1; j <= 5; j++) {
           var num = String(r['phone_' + j] || '').trim().replace(/\.0$/, '');
-          var dnc = String(r['dnc_' + j] || '').toLowerCase() === 'true';
-          var contact = String(r['contact_' + j] || '').trim();
-          if (num && num !== '0') phones.push({ number: num, dnc: dnc, contact: contact });
+          var dnc = String(r['phone_' + j + '_dnc'] || '').toLowerCase() === 'true';
+          var contact = String(r['phone_' + j + '_contact'] || '').trim();
+          var type = String(r['phone_' + j + '_type'] || '').trim();
+          if (num && num !== '0') phones.push({ number: num, dnc: dnc, contact: contact, type: type });
         }
+ 
         leads.push({
           row: i + 1,
           name: String(r.owner_name || 'Unknown Owner').trim(),
@@ -280,6 +283,9 @@ function loadLeads() {
           nextAction: String(r.next_action || ''),
           source: String(r.source || ''),
           leadType: String(r.lead_type || ''),
+          textSent: String(r.text_sent || '').toLowerCase() === 'true',
+          textSentTimestamp: String(r.text_sent_timestamp || ''),
+          // sale_date / publish_date / min_bid: present if scraper ran, blank if not
           saleDate: String(r.sale_date || ''),
           publishDate: String(r.publish_date || ''),
           minBid: String(r.min_bid || ''),
@@ -290,12 +296,12 @@ function loadLeads() {
       renderList();
     })
     .catch(function(err) {
-      showError(err.message || 'Failed to load. Check your API key and make sure the Sheet is shared publicly (View access).');
+      showError(err.message || 'Failed to load. Check API key and make sure the Sheet is shared publicly (View access).');
     });
 }
-
+ 
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHDX2GDqaGggMrXRSRntfBlsTCiOtRe1IHsEcSX2kr7XjagcE5IQJSZ1KPbJzFEc5-/exec';
-
+ 
 function saveToSheet(row, updates) {
   var params = new URLSearchParams();
   params.append('action', 'update');
@@ -304,23 +310,13 @@ function saveToSheet(row, updates) {
   fetch(APPS_SCRIPT_URL + '?' + params.toString())
     .catch(function(e) { console.error('Save error:', e); });
 }
-
-function colToLetter(col) {
-  var letter = '';
-  while (col > 0) {
-    var rem = (col - 1) % 26;
-    letter = String.fromCharCode(65 + rem) + letter;
-    col = Math.floor((col - 1) / 26);
-  }
-  return letter;
-}
-
+ 
 function fmt(num) {
   var d = String(num).replace(/\D/g, '');
   if (d.length < 10) return num;
   return '(' + d.slice(0,3) + ') ' + d.slice(3,6) + '-' + d.slice(6,10);
 }
-
+ 
 function renderTabs() {
   var html = '';
   for (var i = 0; i < TABS.length; i++) {
@@ -329,16 +325,16 @@ function renderTabs() {
   }
   document.getElementById('tabBar').innerHTML = html;
 }
-
+ 
 function setTab(key) { activeTab = key; renderTabs(); renderList(); }
-
+ 
 function toggleSaleSort() {
   sortMode = sortMode === 'saledate' ? 'default' : 'saledate';
   renderList();
   var btn = document.getElementById('sortBtn');
   if (btn) btn.style.background = sortMode === 'saledate' ? 'var(--red)' : 'var(--card)';
 }
-
+ 
 function renderList() {
   var q = document.getElementById('searchInput').value.toLowerCase();
   var filtered = [];
@@ -361,7 +357,6 @@ function renderList() {
   document.getElementById('calledCount').textContent = worked;
   document.getElementById('totalCount').textContent = leads.length;
   document.getElementById('progressFill').style.width = pct + '%';
-  // Sort by sale date if active
   if (sortMode === 'saledate') {
     filtered.sort(function(a, b) {
       var parseDate = function(d) {
@@ -394,21 +389,22 @@ function renderList() {
       var tagClass = daysOut <= 14 ? 'auction-tag soon' : 'auction-tag';
       auctionTag = '<span class="' + tagClass + '">🔨 ' + l.saleDate + (daysOut <= 14 ? ' (' + daysOut + 'd)' : '') + '</span>';
     }
+    var textTag = l.textSent ? '<span class="text-sent-tag">💬 Texted</span>' : '';
     var dimmed = l.status === 'notinterested' || l.status === 'dnc';
     html += '<div class="lead-card ' + (dimmed ? 'dimmed' : '') + '" onclick="openDetail(' + l.row + ')">';
     html += '<div class="lead-name"><div class="dot ' + (DOT[l.status] || 'dot-new') + '"></div>' + l.name + '</div>';
     html += '<div class="lead-meta">' + l.address + ', ' + l.city + ' ' + l.zip + '</div>';
-    html += '<div class="lead-footer"><span class="status-pill ' + (PILL[l.status] || 'pill-new') + '">' + (PILL_LABEL[l.status] || 'New') + '</span>' + chips + fu + auctionTag + '</div>';
+    html += '<div class="lead-footer"><span class="status-pill ' + (PILL[l.status] || 'pill-new') + '">' + (PILL_LABEL[l.status] || 'New') + '</span>' + chips + fu + auctionTag + textTag + '</div>';
     html += '</div>';
   }
   document.getElementById('leadList').innerHTML = html;
 }
-
+ 
 function getLead(row) {
   for (var i = 0; i < leads.length; i++) { if (leads[i].row === row) return leads[i]; }
   return null;
 }
-
+ 
 function openDetail(row) {
   currentId = row;
   var l = getLead(row);
@@ -420,12 +416,12 @@ function openDetail(row) {
   document.getElementById('detailView').scrollTop = 0;
   renderDetail();
 }
-
+ 
 function closeDetail() {
   document.getElementById('detailView').classList.remove('open');
   currentId = null;
 }
-
+ 
 function renderDetail() {
   var l = getLead(currentId);
   if (!l) return;
@@ -433,30 +429,30 @@ function renderDetail() {
   var firstGood = null;
   for (var i = 0; i < l.phones.length; i++) { if (!l.phones[i].dnc) { firstGood = l.phones[i]; break; } }
   var callNum = l.bestPhone || (firstGood ? firstGood.number : '');
-
+ 
   var phonesHtml = '';
   if (l.phones.length) {
     for (var i = 0; i < l.phones.length; i++) {
       var p = l.phones[i];
       phonesHtml += '<div class="phone-item ' + (p.dnc ? 'is-dnc' : '') + '">';
       phonesHtml += '<div><div class="phone-num">' + fmt(p.number) + (p.dnc ? '<span class="dnc-badge">DNC</span>' : '') + '</div>';
-      var contactLabel = p.contact || ('Phone ' + (i+1));
+      var contactLabel = p.contact || p.type || ('Phone ' + (i+1));
       phonesHtml += '<div class="phone-sub">' + contactLabel + (p.dnc ? ' · DNC' : '') + '</div></div>';
       phonesHtml += '<div class="ph-btns">';
       phonesHtml += '<button class="ph-btn ph-call" onclick="dial(\'' + p.number + '\')">📞</button>';
-      phonesHtml += '<button class="ph-btn ph-sms" onclick="sms(\'' + p.number + '\')">💬</button>';
+      phonesHtml += '<button class="ph-btn ph-sms" onclick="openSmsModal(\'' + p.number + '\')">💬</button>';
       phonesHtml += '</div></div>';
     }
   } else {
     phonesHtml = '<div style="color:var(--muted);padding:8px 0;font-size:14px">No phones — door knock only</div>';
   }
-
+ 
   var statusHtml = '';
   for (var i = 0; i < STATUSES.length; i++) {
     var s = STATUSES[i];
     statusHtml += '<div class="status-opt ' + (l.status === s.key ? 'sel-' + s.key : '') + '" onclick="setStatus(\'' + s.key + '\')">' + s.label + '</div>';
   }
-
+ 
   var logEntries = l.notes ? l.notes.split('|||').filter(function(x){ return x.trim(); }) : [];
   var logHtml = '';
   if (logEntries.length) {
@@ -469,10 +465,13 @@ function renderDetail() {
   } else {
     logHtml = '<div style="color:var(--muted);font-size:13px;padding:4px 0">No call history yet</div>';
   }
-
+ 
+  var textSentLabel = l.textSent ? '<span style="font-size:12px;color:#4ade80;margin-left:8px">✓ Text sent ' + (l.textSentTimestamp ? l.textSentTimestamp.split('T')[0] : '') + '</span>' : '';
+ 
   var html = '';
   html += '<div class="detail-name">' + l.name + '</div>';
-  html += '<div class="detail-addr">' + l.address + '<br>' + l.city + ', ' + l.state + ' ' + l.zip + '<br><small style="color:var(--muted)">' + l.leadType + ' · ' + l.source + '</small></div>';
+  html += '<div class="detail-addr">' + l.address + '<br>' + l.city + ', ' + l.state + ' ' + l.zip + '<br><small style="color:var(--muted)">' + l.leadType + (l.source ? ' · ' + l.source : '') + '</small></div>';
+ 
   if (l.saleDate) {
     var sp = l.saleDate.split('/');
     var sts = sp.length === 3 ? new Date(sp[2], sp[0]-1, sp[1]).getTime() : 0;
@@ -484,14 +483,16 @@ function renderDetail() {
     if (l.minBid) html += '<div class="nos-field"><div class="nos-label">💰 Min Bid</div><div class="nos-value">$' + l.minBid + '</div></div>';
     html += '</div>';
   }
+ 
   html += '<div class="action-grid">';
   html += '<button class="action-btn btn-call" onclick="dial(\'' + callNum + '\')"><span class="icon">📞</span>Call</button>';
-  html += '<button class="action-btn btn-text" onclick="sms(\'' + callNum + '\')"><span class="icon">💬</span>Text</button>';
+  html += '<button class="action-btn btn-text" onclick="openSmsModal(\'' + callNum + '\')"><span class="icon">💬</span>Text' + (l.textSent ? ' ✓' : '') + '</button>';
   html += '<button class="action-btn btn-map" onclick="window.open(\'' + mapsUrl + '\')"><span class="icon">📍</span>Map It</button>';
   html += '<button class="action-btn btn-door" onclick="logTouch(\'door knock\')"><span class="icon">🚪</span>Door Knock</button>';
   html += '<button class="action-btn btn-mail" onclick="logTouch(\'mail sent\')"><span class="icon">✉️</span>Mail Sent</button>';
-  html += '<button class="action-btn btn-card" onclick="sendCard(\'' + callNum + '\')"><span class="icon">📇</span>Send Card</button>';
+  html += '<button class="action-btn btn-card" onclick="logTouch(\'letter sent\')"><span class="icon">📄</span>Letter Sent</button>';
   html += '</div>';
+ 
   html += '<div class="section-label">Best Phone</div>';
   html += '<div class="best-row"><input class="best-input" id="bestPhoneInput" type="tel" placeholder="Confirmed best number" value="' + l.bestPhone + '"><button class="best-call" onclick="dialBest()">📞</button></div>';
   html += '<div class="section-label">All Numbers</div>' + phonesHtml;
@@ -503,17 +504,45 @@ function renderDetail() {
   html += '<div class="section-label">Call History</div>' + logHtml;
   document.getElementById('detailBody').innerHTML = html;
 }
-
+ 
 function dial(num) { if (!num) return; window.location.href = 'tel:' + String(num).replace(/\D/g,''); }
-function sms(num) { if (!num) return; window.location.href = 'sms:' + String(num).replace(/\D/g,''); }
-function dialBest() { dial(document.getElementById('bestPhoneInput').value); }
-
-function sendCard(num) {
+ 
+// ── SMS with pre-filled DLTA template ──
+function openSmsModal(num) {
   if (!num) return;
-  var msg = encodeURIComponent("Hi, this is with DLTA Realty. I'll follow up as promised. Feel free to call me anytime.");
-  window.location.href = 'sms:' + String(num).replace(/\D/g,'') + '?body=' + msg;
+  var l = getLead(currentId);
+  var firstName = l ? l.name.split(' ')[0] : 'there';
+  var address = l ? l.address : 'your property';
+  var msg = 'Hi ' + firstName + ', this is with Delta Real Estate. I just tried reaching you about ' + address + '. It came across my desk in pre-foreclosure and I wanted to make sure you know your options before the sale date. Most people don\'t realize they can avoid foreclosure AND walk away with cash. Can we talk 5 minutes? Call me back or reply to this text.';
+  pendingSmsNum = String(num).replace(/\D/g,'');
+  pendingSmsMsg = msg;
+  document.getElementById('smsPreviewText').textContent = msg;
+  document.getElementById('smsModal').classList.add('open');
 }
-
+ 
+function confirmSms() {
+  // Open iMessage with pre-filled body
+  window.location.href = 'sms:' + pendingSmsNum + '?body=' + encodeURIComponent(pendingSmsMsg);
+  // Mark text_sent in sheet and locally
+  var l = getLead(currentId);
+  if (l) {
+    var ts = new Date().toISOString().split('T')[0];
+    l.textSent = true;
+    l.textSentTimestamp = ts;
+    saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
+  }
+  closeSmsModal();
+  renderDetail();
+}
+ 
+function closeSmsModal() {
+  document.getElementById('smsModal').classList.remove('open');
+  pendingSmsNum = '';
+  pendingSmsMsg = '';
+}
+ 
+function dialBest() { dial(document.getElementById('bestPhoneInput').value); }
+ 
 function logTouch(type) {
   var l = getLead(currentId);
   if (!l) return;
@@ -524,14 +553,14 @@ function logTouch(type) {
   saveToSheet(currentId, { notes: updated, call_status: type });
   renderDetail();
 }
-
+ 
 function setStatus(key) {
   var l = getLead(currentId);
   if (l) l.status = key;
   saveToSheet(currentId, { lead_status: key, call_status: key });
   renderDetail();
 }
-
+ 
 function saveDetail() {
   if (saving) return;
   saving = true;
@@ -559,18 +588,18 @@ function saveDetail() {
   saving = false;
   setTimeout(function() { btn.textContent = '💾 Save & Log Call'; renderDetail(); }, 1500);
 }
-
+ 
 function openLookup() {
   document.getElementById('lookupModal').classList.add('open');
   document.getElementById('lookupInput').focus();
 }
-
+ 
 function closeLookup() {
   document.getElementById('lookupModal').classList.remove('open');
   document.getElementById('lookupInput').value = '';
   document.getElementById('lookupResult').innerHTML = '';
 }
-
+ 
 function doLookup() {
   var num = document.getElementById('lookupInput').value.replace(/\D/g,'');
   if (num.length < 7) { document.getElementById('lookupResult').innerHTML = ''; return; }
@@ -594,8 +623,8 @@ function doLookup() {
   }
   document.getElementById('lookupResult').innerHTML = html;
 }
-
-if (checkApiKey()) loadLeads();
+ 
+loadLeads();
 </script>
 </body>
 </html>
