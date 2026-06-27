@@ -9,6 +9,11 @@
   var SHEET_ID = '1MlrW2RAdykKJFBbiIeNBlCwct7oepW_mrybhS3U1Wqw';
   var SHEET_NAME = 'dlta-leads-formatted';
 </script>
+<!-- DLTA data adapter: Espo behind a swappable boundary. config.js holds the
+     API key and is gitignored; copy src/data/config.example.js to create it.
+     The dialer reaches the adapter via window.adapter (set by adapter.js). -->
+<script src="src/data/config.js"></script>
+<script type="module" src="src/data/adapter.js"></script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
 :root {
@@ -81,8 +86,12 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .detail-body { padding: 16px; }
 .detail-name { font-size: 26px; font-weight: 900; letter-spacing: -0.5px; margin-bottom: 4px; }
 .detail-addr { font-size: 14px; color: var(--muted); line-height: 1.6; margin-bottom: 16px; }
-.action-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 20px; }
+.action-grid { margin-bottom: 20px; }
+.action-primary { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+.touch-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
 .action-btn { padding: 18px 10px; border-radius: 14px; border: none; font-size: 14px; font-weight: 800; cursor: pointer; display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.touch-row .action-btn { padding: 12px 6px; font-size: 11px; gap: 4px; }
+.touch-row .action-btn .icon { font-size: 20px; }
 .action-btn .icon { font-size: 24px; }
 .btn-call { background: var(--green); color: #fff; }
 .btn-text { background: var(--accent); color: #fff; }
@@ -270,6 +279,9 @@ function loadLeads() {
 
         leads.push({
           row: i + 1,
+          // Join key for Espo. The adapter writes are keyed on this, not the
+          // Sheet row. Mirrored back from Espo by the step-5 sync job.
+          leadId: String(r.lead_id || '').trim(),
           name: String(r.owner_name || 'Unknown Owner').trim(),
           address: String(r.address_street || r.address_full || ''),
           city: String(r.address_city || r.city || ''),
@@ -302,6 +314,11 @@ function loadLeads() {
 
 var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHDX2GDqaGggMrXRSRntfBlsTCiOtRe1IHsEcSX2kr7XjagcE5IQJSZ1KPbJzFEc5-/exec';
 
+// DEPRECATED as the dialer's write path. Espo is now the system of record and
+// all dispositions/touches go through the adapter. Status and follow_up flow
+// back to the Sheet only via the step-5 Espo -> Sheet mirror, never from here
+// (one authority per field, one direction each). Left in place as the documented
+// escape-hatch backup; nothing in the dialer calls it now.
 function saveToSheet(row, updates) {
   var params = new URLSearchParams();
   params.append('action', 'update');
@@ -485,12 +502,16 @@ function renderDetail() {
   }
 
   html += '<div class="action-grid">';
-  html += '<button class="action-btn btn-call" onclick="dial(\'' + callNum + '\')"><span class="icon">📞</span>Call</button>';
+  html += '<div class="action-primary">';
+  html += '<button class="action-btn btn-call" onclick="callAction(\'' + callNum + '\')"><span class="icon">📞</span>Call</button>';
   html += '<button class="action-btn btn-text" onclick="openSmsModal(\'' + callNum + '\')"><span class="icon">💬</span>Text' + (l.textSent ? ' ✓' : '') + '</button>';
-  html += '<button class="action-btn btn-map" onclick="window.open(\'' + mapsUrl + '\')"><span class="icon">📍</span>Map It</button>';
-  html += '<button class="action-btn btn-door" onclick="logTouch(\'door knock\')"><span class="icon">🚪</span>Door Knock</button>';
-  html += '<button class="action-btn btn-mail" onclick="logTouch(\'mail sent\')"><span class="icon">✉️</span>Mail Sent</button>';
-  html += '<button class="action-btn btn-card" onclick="logTouch(\'letter sent\')"><span class="icon">📄</span>Letter Sent</button>';
+  html += '</div>';
+  html += '<div class="touch-row">';
+  html += '<button class="action-btn btn-map" onclick="mapAction(\'' + mapsUrl + '\')"><span class="icon">📍</span>Map It</button>';
+  html += '<button class="action-btn btn-door" onclick="logTouch(\'Door Knock\')"><span class="icon">🚪</span>Door Knock</button>';
+  html += '<button class="action-btn btn-mail" onclick="logTouch(\'Mail Sent\')"><span class="icon">✉️</span>Mail Sent</button>';
+  html += '<button class="action-btn btn-card" onclick="logTouch(\'Letter Sent\')"><span class="icon">📄</span>Letter Sent</button>';
+  html += '</div>';
   html += '</div>';
 
   html += '<div class="section-label">Best Phone</div>';
@@ -523,13 +544,15 @@ function openSmsModal(num) {
 function confirmSms() {
   // Open iMessage with pre-filled body
   window.location.href = 'sms:' + pendingSmsNum + '?body=' + encodeURIComponent(pendingSmsMsg);
-  // Mark text_sent in sheet and locally
+  // Mark text_sent locally for UI, and log the Text touch to Espo via the adapter.
   var l = getLead(currentId);
   if (l) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
     l.textSentTimestamp = ts;
-    saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
+    if (l.leadId && window.adapter) {
+      window.adapter.logTouch(l.leadId, 'Text').catch(function (e) { console.error('logTouch failed:', e); });
+    }
   }
   closeSmsModal();
   renderDetail();
@@ -543,50 +566,97 @@ function closeSmsModal() {
 
 function dialBest() { dial(document.getElementById('bestPhoneInput').value); }
 
+// Returns the Espo join key for the open lead, or null with a warning if the
+// Sheet row has no lead_id yet (so writes never silently target the wrong place).
+function currentLeadKey() {
+  var l = getLead(currentId);
+  if (!l) return null;
+  if (!l.leadId) {
+    console.warn('No lead_id on this row; cannot write to Espo until the row is synced.');
+    return null;
+  }
+  return l.leadId;
+}
+
+// Every touch (Map It, Door Knock, Mail Sent, Letter Sent, Call, Text) creates
+// one cCallLog event in Espo via the adapter. We also append an in-memory log
+// line for immediate feedback; the Sheet is updated only by the step-5 mirror.
 function logTouch(type) {
   var l = getLead(currentId);
   if (!l) return;
   var now = new Date().toLocaleDateString();
   var entry = now + '|' + type + '|' + type + ' logged';
-  var updated = l.notes ? l.notes + '|||' + entry : entry;
-  l.notes = updated;
-  saveToSheet(currentId, { notes: updated, call_status: type });
+  l.notes = l.notes ? l.notes + '|||' + entry : entry;
+  var key = currentLeadKey();
+  if (key && window.adapter) {
+    window.adapter.logTouch(key, type).catch(function (e) { console.error('logTouch failed:', e); });
+  }
   renderDetail();
 }
 
+// Call tile: log the touch, then place the call.
+function callAction(num) {
+  logTouch('Call');
+  dial(num);
+}
+
+// Map It tile: log the touch, then open Maps.
+function mapAction(url) {
+  logTouch('Map It');
+  window.open(url);
+}
+
+// Status is now persisted to Espo on "Save & Log Call" (via adapter.saveDisposition),
+// not written to the Sheet here. Tapping a status only updates the in-memory
+// selection; Save commits it. This keeps status one-directional (Espo -> Sheet).
 function setStatus(key) {
   var l = getLead(currentId);
   if (l) l.status = key;
-  saveToSheet(currentId, { lead_status: key, call_status: key });
   renderDetail();
 }
 
+// "Save & Log Call" now writes the disposition to Espo through the adapter:
+// it updates the Lead (status, follow-up, next action) and creates one cCallLog
+// event. The Sheet is no longer written here; the step-5 mirror carries status
+// and follow_up back to the Sheet for the dialer's reads.
 function saveDetail() {
   if (saving) return;
-  saving = true;
   var btn = document.getElementById('saveBtn');
-  btn.textContent = 'Saving...';
   var l = getLead(currentId);
   var notes = document.getElementById('notesInput').value.trim();
   var followUp = document.getElementById('followupInput').value;
   var nextAction = document.getElementById('nextActionInput').value;
   var bestPhone = document.getElementById('bestPhoneInput').value;
   var now = new Date().toLocaleDateString();
-  var entry = notes ? now + '|' + (l ? l.status : 'called') + '|' + notes : '';
+  var status = l ? l.status : 'called';
+  var entry = notes ? now + '|' + status + '|' + notes : '';
   var existing = l ? l.notes : '';
   var updatedNotes = entry ? (existing ? existing + '|||' + entry : entry) : existing;
   if (l) { l.notes = updatedNotes; l.followUp = followUp; l.nextAction = nextAction; l.bestPhone = bestPhone; }
-  saveToSheet(currentId, {
-    notes: updatedNotes,
-    call_status: l ? l.status : 'called',
-    lead_status: l ? l.status : 'called',
-    follow_up_date: followUp,
-    next_action: nextAction,
-    best_phone_number: bestPhone
+
+  if (!l || !l.leadId || !window.adapter) {
+    btn.textContent = '⚠️ No lead_id — not saved';
+    console.warn('Save skipped: missing lead_id or adapter not loaded.');
+    setTimeout(function () { btn.textContent = '💾 Save & Log Call'; renderDetail(); }, 1800);
+    return;
+  }
+
+  saving = true;
+  btn.textContent = 'Saving...';
+  window.adapter.saveDisposition(l.leadId, {
+    status: status,
+    followUpDate: followUp,
+    nextAction: nextAction,
+    notes: notes
+  }).then(function () {
+    btn.textContent = '✅ Saved';
+  }).catch(function (e) {
+    console.error('saveDisposition failed:', e);
+    btn.textContent = '⚠️ Save failed';
+  }).then(function () {
+    saving = false;
+    setTimeout(function () { btn.textContent = '💾 Save & Log Call'; renderDetail(); }, 1500);
   });
-  btn.textContent = '✅ Saved';
-  saving = false;
-  setTimeout(function() { btn.textContent = '💾 Save & Log Call'; renderDetail(); }, 1500);
 }
 
 function openLookup() {
