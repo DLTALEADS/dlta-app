@@ -173,6 +173,14 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .hbar-fill { height: 100%; background: var(--accent); border-radius: 6px; min-width: 2px; }
 .hbar-val { width: 26px; text-align: right; font-size: 13px; font-weight: 800; color: var(--text); }
 
+/* Goals */
+.goal-flabel { display: block; font-size: 12px; color: var(--muted); margin: 12px 0 4px; }
+.goal-output { display: flex; justify-content: space-between; align-items: center; padding: 11px 0; border-bottom: 1px solid var(--border); font-size: 14px; color: var(--muted); }
+.goal-output b { color: var(--text); font-weight: 800; }
+.goal-output small { color: var(--muted); font-size: 11px; }
+.goal-output.big { font-size: 16px; color: var(--text); }
+.goal-output.big b { color: var(--accent); font-size: 22px; }
+
 /* Empty state */
 .empty-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 28px 20px; text-align: center; }
 .empty-title { font-weight: 800; margin-bottom: 8px; color: var(--text); }
@@ -211,6 +219,14 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div id="activityBody"><div class="loading"><div class="spinner"></div><div>Loading activity...</div></div></div>
 </div>
 
+<div id="goalsView" class="screen" style="display:none">
+  <div class="screen-head">
+    <div class="logo">DL<span>T</span>A</div>
+    <div class="screen-sub">Goals</div>
+  </div>
+  <div id="goalsBody"><div class="loading"><div class="spinner"></div><div>Loading goals...</div></div></div>
+</div>
+
 <div class="detail" id="detailView">
   <div class="detail-header">
     <button class="back-btn" onclick="closeDetail()">← Back</button>
@@ -245,6 +261,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 <nav class="tabbar" id="tabbar">
   <button id="nav-leads" class="active" onclick="switchScreen('leads')"><span class="tb-icon">📋</span>Leads</button>
   <button id="nav-activity" onclick="switchScreen('activity')"><span class="tb-icon">📊</span>Activity</button>
+  <button id="nav-goals" onclick="switchScreen('goals')"><span class="tb-icon">🎯</span>Goals</button>
 </nav>
 
 <script>
@@ -753,7 +770,7 @@ function doLookup() {
 // saveGoalInputs); they never touch Espo directly.
 // ─────────────────────────────────────────────────────────────────────────
 function switchScreen(name) {
-  var screens = { leads: 'listView', activity: 'activityView' };
+  var screens = { leads: 'listView', activity: 'activityView', goals: 'goalsView' };
   for (var key in screens) {
     if (!screens.hasOwnProperty(key)) continue;
     var el = document.getElementById(screens[key]);
@@ -762,6 +779,7 @@ function switchScreen(name) {
     if (nav) nav.classList.toggle('active', key === name);
   }
   if (name === 'activity') renderActivity();
+  if (name === 'goals') renderGoals();
 }
 
 // Metrics loader that degrades gracefully when Espo is not reachable yet
@@ -907,6 +925,59 @@ function outcomeChart(outcomes) {
             '<div class="hbar-val">' + items[i][1] + '</div></div>';
   }
   return '<div class="section-label">This Week · Outcomes</div><div class="bar-chart">' + rows + '</div>';
+}
+
+// ── Goals screen ──
+function renderGoals() {
+  Promise.all([loadMetrics(), loadGoalInputs()]).then(function (res) {
+    goalsRender(res[1] || {}, res[0]);
+  });
+}
+
+function goalsRender(inputs, metrics) {
+  var body = document.getElementById('goalsBody');
+  var g = computeGoals(inputs, metrics);
+  var html = '';
+
+  html += '<div class="section-label">Lifestyle Target</div>';
+  html += goalInput('lifestyleIncome', 'Annual income you want ($)', inputs.lifestyleIncome);
+
+  html += '<div class="section-label">Deal Economics</div>';
+  html += goalInput('avgSalePrice', 'Average sale price ($)', inputs.avgSalePrice);
+  html += goalInput('commissionPercent', 'Your commission (%)', inputs.commissionPercent);
+  html += goalInput('leadsPerClosing', 'Leads needed per closing', inputs.leadsPerClosing);
+  html += goalInput('workdaysPerMonth', 'Workdays per month', inputs.workdaysPerMonth);
+  html += '<button class="save-btn" onclick="saveGoals()">💾 Save Goals</button>';
+
+  var src = g.measured ? 'measured this week' : 'default, no data yet';
+  html += '<div class="section-label">Measured Rates</div>';
+  html += '<div class="goal-output"><span>Contact rate <small>(' + src + ')</small></span><b>' + pctFmt(g.contactRate) + '</b></div>';
+  html += '<div class="goal-output"><span>Leads per dial <small>(' + src + ')</small></span><b>' + pctFmt(g.leadsPerDial) + '</b></div>';
+
+  html += '<div class="section-label">Your Plan</div>';
+  html += '<div class="goal-output"><span>Commission per closing</span><b>' + money(g.commissionPerClosing) + '</b></div>';
+  html += '<div class="goal-output"><span>Closings per year</span><b>' + g.closingsPerYear.toFixed(1) + '</b></div>';
+  html += '<div class="goal-output"><span>Closings per month</span><b>' + g.closingsPerMonth.toFixed(1) + '</b></div>';
+  html += '<div class="goal-output"><span>Leads per month</span><b>' + Math.round(g.leadsPerMonth) + '</b></div>';
+  html += '<div class="goal-output big"><span>Dials per day</span><b>' + Math.ceil(g.dialsPerDay) + '</b></div>';
+
+  body.innerHTML = html;
+}
+
+function goalInput(key, label, val) {
+  return '<label class="goal-flabel">' + label + '</label>' +
+         '<input class="field-input" type="number" inputmode="decimal" id="goal-' + key + '" value="' + (val != null ? val : '') + '">';
+}
+
+function saveGoals() {
+  var keys = ['lifestyleIncome', 'avgSalePrice', 'commissionPercent', 'leadsPerClosing', 'workdaysPerMonth'];
+  var obj = {};
+  for (var i = 0; i < keys.length; i++) {
+    var input = document.getElementById('goal-' + keys[i]);
+    obj[keys[i]] = input ? Number(input.value) : 0;
+  }
+  if (!window.adapter) return;
+  window.adapter.saveGoalInputs(obj).then(function () { renderGoals(); });
 }
 
 // Small formatters shared by Activity and Goals.
