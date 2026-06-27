@@ -1,0 +1,7 @@
+# Local adapter config holds the Espo API key. Never commit it.
+src/data/config.js
+
+# OS / editor noise
+.DS_Store
+*.log
+node_modules/
