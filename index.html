@@ -137,6 +137,46 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 15px; }
 .sms-preview { background: var(--card); border: 1px solid var(--accent); border-radius: 12px; padding: 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; color: var(--text); }
 .sms-preview-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; }
+
+/* ── App shell: bottom tab bar ── */
+.tabbar { position: fixed; bottom: 0; left: 0; right: 0; height: 62px; background: var(--surface); border-top: 1px solid var(--border); display: flex; z-index: 150; }
+.tabbar button { flex: 1; background: none; border: none; color: var(--muted); font-size: 11px; font-weight: 700; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; cursor: pointer; }
+.tabbar button.active { color: var(--accent); }
+.tabbar .tb-icon { font-size: 20px; line-height: 1; }
+
+/* ── Activity / Goals screens ── */
+.screen { padding: 16px 16px 84px; }
+.screen-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 18px; }
+.screen-sub { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 1.5px; font-weight: 800; }
+
+/* Rings */
+.rings { display: flex; gap: 10px; margin-bottom: 20px; }
+.ring { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 5px; }
+.ring svg { width: 92px; height: 92px; }
+.ring-label { font-size: 11px; color: var(--text); text-transform: uppercase; letter-spacing: 1px; font-weight: 800; }
+.ring-sub { font-size: 11px; color: var(--muted); }
+
+/* Charts */
+.bar-chart { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 16px; margin-bottom: 18px; }
+.chart-plot { position: relative; height: 140px; display: flex; align-items: flex-end; gap: 6px; }
+.vcol { flex: 1; display: flex; align-items: flex-end; height: 100%; }
+.vfill { width: 100%; background: var(--accent); border-radius: 6px 6px 0 0; min-height: 2px; }
+.vfill.hit { background: var(--green); }
+.goal-line { position: absolute; left: 0; right: 0; border-top: 2px dashed var(--muted); pointer-events: none; }
+.goal-line span { position: absolute; right: 0; top: -14px; font-size: 10px; color: var(--muted); }
+.day-labels { display: flex; gap: 6px; margin-top: 6px; }
+.day-labels div { flex: 1; text-align: center; font-size: 11px; color: var(--muted); }
+.hbar-row { display: flex; align-items: center; gap: 10px; margin-bottom: 12px; }
+.hbar-row:last-child { margin-bottom: 0; }
+.hbar-label { width: 120px; font-size: 12px; color: var(--text); }
+.hbar-track { flex: 1; height: 10px; background: var(--border); border-radius: 6px; overflow: hidden; }
+.hbar-fill { height: 100%; background: var(--accent); border-radius: 6px; min-width: 2px; }
+.hbar-val { width: 26px; text-align: right; font-size: 13px; font-weight: 800; color: var(--text); }
+
+/* Empty state */
+.empty-card { background: var(--card); border: 1px solid var(--border); border-radius: 18px; padding: 28px 20px; text-align: center; }
+.empty-title { font-weight: 800; margin-bottom: 8px; color: var(--text); }
+.empty-msg { color: var(--muted); font-size: 13px; line-height: 1.5; }
 </style>
 </head>
 <body>
@@ -161,6 +201,14 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <div class="count-label" id="countLabel"></div>
     <div id="leadList"><div class="loading"><div class="spinner"></div><div>Loading leads...</div></div></div>
   </div>
+</div>
+
+<div id="activityView" class="screen" style="display:none">
+  <div class="screen-head">
+    <div class="logo">DL<span>T</span>A</div>
+    <div class="screen-sub">Activity</div>
+  </div>
+  <div id="activityBody"><div class="loading"><div class="spinner"></div><div>Loading activity...</div></div></div>
 </div>
 
 <div class="detail" id="detailView">
@@ -193,6 +241,11 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <button class="modal-close" onclick="closeSmsModal()">Cancel</button>
   </div>
 </div>
+
+<nav class="tabbar" id="tabbar">
+  <button id="nav-leads" class="active" onclick="switchScreen('leads')"><span class="tb-icon">📋</span>Leads</button>
+  <button id="nav-activity" onclick="switchScreen('activity')"><span class="tb-icon">📊</span>Activity</button>
+</nav>
 
 <script>
 var leads = [];
@@ -694,7 +747,177 @@ function doLookup() {
   document.getElementById('lookupResult').innerHTML = html;
 }
 
+// ─────────────────────────────────────────────────────────────────────────
+// App shell: bottom tab navigation across Leads / Activity / Goals.
+// Activity and Goals read ONLY through window.adapter (getMetrics, getGoalInputs,
+// saveGoalInputs); they never touch Espo directly.
+// ─────────────────────────────────────────────────────────────────────────
+function switchScreen(name) {
+  var screens = { leads: 'listView', activity: 'activityView' };
+  for (var key in screens) {
+    if (!screens.hasOwnProperty(key)) continue;
+    var el = document.getElementById(screens[key]);
+    if (el) el.style.display = (key === name) ? '' : 'none';
+    var nav = document.getElementById('nav-' + key);
+    if (nav) nav.classList.toggle('active', key === name);
+  }
+  if (name === 'activity') renderActivity();
+}
+
+// Metrics loader that degrades gracefully when Espo is not reachable yet
+// (no config.js, offline, or cCallLog empty). Screens get null and show a hint.
+function loadMetrics() {
+  if (!window.adapter) return Promise.resolve(null);
+  return window.adapter.getMetrics({}).catch(function (e) {
+    console.warn('getMetrics unavailable:', e.message);
+    return null;
+  });
+}
+
+function loadGoalInputs() {
+  if (!window.adapter) return Promise.resolve({});
+  return window.adapter.getGoalInputs().catch(function () { return {}; });
+}
+
+// Shared funnel math. Lifestyle income -> closings -> leads/month -> dials/day.
+// Commission is a true percent of average sale price. Contact rate and
+// leads-per-dial are MEASURED from getMetrics, with fallbacks until data exists.
+var FALLBACK_CONTACT_RATE = 0.30;
+var FALLBACK_LEADS_PER_DIAL = 0.10;
+var WORKDAYS_PER_WEEK = 5;
+
+function computeGoals(inputs, metrics) {
+  var commissionPerClosing = (Number(inputs.avgSalePrice) || 0) * (Number(inputs.commissionPercent) || 0) / 100;
+  var closingsPerYear = commissionPerClosing > 0 ? (Number(inputs.lifestyleIncome) || 0) / commissionPerClosing : 0;
+  var closingsPerMonth = closingsPerYear / 12;
+  var leadsPerMonth = closingsPerMonth * (Number(inputs.leadsPerClosing) || 0);
+
+  var dials = metrics ? metrics.dials : 0;
+  var measuredContact = (metrics && dials > 0) ? metrics.contacts / dials : null;
+  var measuredLeadsPerDial = (metrics && dials > 0) ? metrics.leads / dials : null;
+  var contactRate = measuredContact != null ? measuredContact : FALLBACK_CONTACT_RATE;
+  var leadsPerDial = measuredLeadsPerDial != null ? measuredLeadsPerDial : FALLBACK_LEADS_PER_DIAL;
+
+  var dialsPerMonth = leadsPerDial > 0 ? leadsPerMonth / leadsPerDial : 0;
+  var workdays = Number(inputs.workdaysPerMonth) || 20;
+  var dialsPerDay = workdays > 0 ? dialsPerMonth / workdays : 0;
+
+  return {
+    commissionPerClosing: commissionPerClosing,
+    closingsPerYear: closingsPerYear,
+    closingsPerMonth: closingsPerMonth,
+    leadsPerMonth: leadsPerMonth,
+    dialsPerMonth: dialsPerMonth,
+    dialsPerDay: dialsPerDay,
+    contactRate: contactRate,
+    leadsPerDial: leadsPerDial,
+    measured: measuredContact != null
+  };
+}
+
+// ── Activity screen ──
+function renderActivity() {
+  var body = document.getElementById('activityBody');
+  body.innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading activity...</div></div>';
+  Promise.all([loadMetrics(), loadGoalInputs()]).then(function (res) {
+    var metrics = res[0];
+    var inputs = res[1] || {};
+    if (!metrics) {
+      body.innerHTML = emptyState('No live metrics yet',
+        'Add src/data/config.js with your Espo key, then log calls and touches. Activity fills in from the cCallLog events automatically.');
+      return;
+    }
+    var goals = computeGoals(inputs, metrics);
+    var dialsTarget = Math.round(goals.dialsPerDay * WORKDAYS_PER_WEEK);
+    var contactsTarget = Math.round(dialsTarget * goals.contactRate);
+    var apptsTarget = Math.round(goals.leadsPerMonth / 4);
+
+    var html = '';
+    html += '<div class="rings">';
+    html += ringCard('Dials', metrics.dials, dialsTarget);
+    html += ringCard('Contacts', metrics.contacts, contactsTarget);
+    html += ringCard('Appts', metrics.appts, apptsTarget);
+    html += '</div>';
+    html += weeklyDialsChart(metrics.perDay, goals.dialsPerDay);
+    html += outcomeChart(metrics.outcomes);
+    body.innerHTML = html;
+  });
+}
+
+// Progress ring. Fills blue in progress, green at goal.
+function ringCard(label, value, target) {
+  var pct = target > 0 ? Math.min(value / target, 1) : 0;
+  var atGoal = target > 0 && value >= target;
+  var color = atGoal ? '#16a34a' : '#2563eb';
+  var circ = 264;
+  var offset = circ * (1 - pct);
+  var s = '';
+  s += '<div class="ring">';
+  s += '<svg viewBox="0 0 100 100">';
+  s += '<circle cx="50" cy="50" r="42" fill="none" stroke="#2a2a38" stroke-width="9"></circle>';
+  s += '<circle cx="50" cy="50" r="42" fill="none" stroke="' + color + '" stroke-width="9" stroke-linecap="round" stroke-dasharray="' + circ + '" stroke-dashoffset="' + offset + '" transform="rotate(-90 50 50)"></circle>';
+  s += '<text x="50" y="57" text-anchor="middle" font-size="24" font-weight="800" fill="#f1f1f3">' + value + '</text>';
+  s += '</svg>';
+  s += '<div class="ring-label">' + label + '</div>';
+  s += '<div class="ring-sub">of ' + target + '</div>';
+  s += '</div>';
+  return s;
+}
+
+// Weekly dials, one bar per day, with the daily goal as a dashed line.
+function weeklyDialsChart(perDay, goalPerDay) {
+  perDay = perDay || [0, 0, 0, 0, 0, 0, 0];
+  var days = ['S', 'M', 'T', 'W', 'T', 'F', 'S'];
+  var max = Math.max.apply(null, perDay.concat([goalPerDay, 1]));
+  var goalPct = Math.min(goalPerDay / max, 1) * 100;
+  var bars = '';
+  for (var i = 0; i < 7; i++) {
+    var h = Math.round((perDay[i] / max) * 100);
+    var hit = goalPerDay > 0 && perDay[i] >= goalPerDay;
+    bars += '<div class="vcol"><div class="vfill' + (hit ? ' hit' : '') + '" style="height:' + h + '%"></div></div>';
+  }
+  var labels = '';
+  for (var j = 0; j < 7; j++) labels += '<div>' + days[j] + '</div>';
+  var html = '';
+  html += '<div class="section-label">This Week · Dials</div>';
+  html += '<div class="bar-chart">';
+  html += '<div class="chart-plot">';
+  html += '<div class="goal-line" style="bottom:' + goalPct + '%"><span>goal ' + Math.round(goalPerDay) + '/day</span></div>';
+  html += bars;
+  html += '</div>';
+  html += '<div class="day-labels">' + labels + '</div>';
+  html += '</div>';
+  return html;
+}
+
+// Weekly outreach outcomes as horizontal bars.
+function outcomeChart(outcomes) {
+  outcomes = outcomes || {};
+  var items = [
+    ['✉️ Mail Sent', Number(outcomes['Mail Sent']) || 0],
+    ['📄 Letter Sent', Number(outcomes['Letter Sent']) || 0],
+    ['🚪 Door Knock', Number(outcomes['Door Knock']) || 0]
+  ];
+  var max = Math.max(1, items[0][1], items[1][1], items[2][1]);
+  var rows = '';
+  for (var i = 0; i < items.length; i++) {
+    var w = Math.round((items[i][1] / max) * 100);
+    rows += '<div class="hbar-row"><div class="hbar-label">' + items[i][0] + '</div>' +
+            '<div class="hbar-track"><div class="hbar-fill" style="width:' + w + '%"></div></div>' +
+            '<div class="hbar-val">' + items[i][1] + '</div></div>';
+  }
+  return '<div class="section-label">This Week · Outcomes</div><div class="bar-chart">' + rows + '</div>';
+}
+
+// Small formatters shared by Activity and Goals.
+function money(n) { return '$' + Math.round(Number(n) || 0).toLocaleString(); }
+function pctFmt(r) { return (Number(r) * 100).toFixed(1) + '%'; }
+function emptyState(title, msg) {
+  return '<div class="empty-card"><div class="empty-title">' + title + '</div><div class="empty-msg">' + msg + '</div></div>';
+}
+
 loadLeads();
+switchScreen('leads');
 </script>
 </body>
 </html>

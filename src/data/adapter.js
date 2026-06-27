@@ -307,9 +307,9 @@ function getMetrics(range) {
 // localStorage, swappable to an Espo settings entity without touching screens.
 var GOAL_KEY = 'dlta.goalInputs';
 var GOAL_DEFAULTS = {
-  lifestyleIncome: 120000, // annual take-home target
-  avgCommission: 9000,     // dollars per closing
-  commissionPercent: 3,    // true percent, handled as a percent not a fraction
+  lifestyleIncome: 120000, // annual income target
+  avgSalePrice: 300000,    // dollars per deal
+  commissionPercent: 3,    // true percent of sale price, not a fraction
   leadsPerClosing: 10,
   workdaysPerMonth: 20
 };
