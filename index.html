@@ -7,7 +7,14 @@
 <script>
   var API_KEY = 'AIzaSyDQLMYtGXu2phBO3twCN7YdqZaccO64CKo';
   var SHEET_ID = '1MlrW2RAdykKJFBbiIeNBlCwct7oepW_mrybhS3U1Wqw';
-  var SHEET_NAME = 'dlta-leads-formatted';
+  // Lead sources the user can switch between. The id is the literal tab name,
+  // used both for the Sheets read range and as the `sheet` param on every write,
+  // so reads and writes always hit the same tab. Held in memory only.
+  var SOURCES = [
+    { id: 'dlta-leads-formatted', label: 'LandVoice' },
+    { id: 'remine-leads', label: 'Remine' }
+  ];
+  var currentSource = SOURCES[0].id;
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -31,6 +38,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .tabs::-webkit-scrollbar { display: none; }
 .tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; background: var(--card); color: var(--muted); border: 1px solid var(--border); }
 .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+.source-picker { display: flex; gap: 4px; background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 12px; padding: 4px; margin-bottom: 8px; }
+.source-seg { flex: 1; text-align: center; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 700; color: #8A8A8E; background: transparent; border: none; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, color 0.15s; }
+.source-seg.active { background: #2D6BFF; color: #fff; }
 .progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; }
 .progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
 .list { padding: 12px 16px 100px; }
@@ -183,6 +193,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
       <div class="logo">DL<span>T</span>A</div>
       <div class="stats"><b id="calledCount">0</b> worked · <b id="totalCount">0</b> total</div>
     </div>
+    <div class="source-picker" id="sourcePicker"></div>
     <div class="search-row">
       <input class="search-input" id="searchInput" placeholder="Search name, address, zip..." oninput="renderList()">
       <button class="lookup-btn" onclick="openLookup()">📞 Lookup</button>
@@ -302,14 +313,30 @@ function normalizeStatus(raw) {
 
 // API key baked in - no gate needed
 
+function sourceLabel(id) {
+  for (var i = 0; i < SOURCES.length; i++) { if (SOURCES[i].id === id) return SOURCES[i].label; }
+  return id;
+}
+
 function showError(msg) {
   document.getElementById('leadList').innerHTML =
     '<div class="error-box"><h3>⚠️ Could Not Load Leads</h3><p>' + msg + '</p><button class="retry-btn" onclick="loadLeads()">Retry</button></div>';
 }
 
+// Clean empty state for a source that loaded fine but has no leads. Distinct
+// from showError so a valid-but-empty tab does not read as a failure.
+function showEmpty(msg) {
+  document.getElementById('countLabel').textContent = '0 leads';
+  document.getElementById('calledCount').textContent = '0';
+  document.getElementById('totalCount').textContent = '0';
+  document.getElementById('progressFill').style.width = '0%';
+  document.getElementById('leadList').innerHTML =
+    '<div class="empty">📭<br>' + msg + '</div>';
+}
+
 function loadLeads() {
   document.getElementById('leadList').innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading leads...</div></div>';
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(SHEET_NAME) + '?key=' + API_KEY;
+  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(currentSource) + '?key=' + API_KEY;
   fetch(url)
     .then(function(r) {
       if (!r.ok) return r.json().then(function(e) { throw new Error(e.error.message); });
@@ -317,7 +344,7 @@ function loadLeads() {
     })
     .then(function(data) {
       var rows = data.values || [];
-      if (rows.length < 2) { showError('No data found in sheet.'); return; }
+      if (rows.length < 2) { showEmpty('No leads found in “' + sourceLabel(currentSource) + '.” This source is empty.'); return; }
       var headers = rows[0];
       leads = [];
       for (var i = 1; i < rows.length; i++) {
@@ -377,6 +404,9 @@ function saveToSheet(row, updates) {
   params.append('action', 'update');
   params.append('row', row);
   params.append('updates', JSON.stringify(updates));
+  // Name the tab the user is reading so every write lands on the same source.
+  // _row values come from currentSource's read, so the write must match it.
+  params.append('sheet', currentSource);
   fetch(APPS_SCRIPT_URL + '?' + params.toString())
     .catch(function(e) { console.error('Save error:', e); });
 }
@@ -397,6 +427,30 @@ function renderTabs() {
 }
 
 function setTab(key) { activeTab = key; renderTabs(); renderList(); }
+
+function renderSourcePicker() {
+  var html = '';
+  for (var i = 0; i < SOURCES.length; i++) {
+    var s = SOURCES[i];
+    html += '<button class="source-seg ' + (currentSource === s.id ? 'active' : '') +
+      '" onclick="setSource(\'' + s.id + '\')">' + s.label + '</button>';
+  }
+  document.getElementById('sourcePicker').innerHTML = html;
+}
+
+function setSource(id) {
+  if (id === currentSource) return;
+  currentSource = id;
+  // Drop the old queue so no stale leads/_row values survive the switch, and
+  // send the dialer back to the top of the (about-to-load) new queue.
+  leads = [];
+  currentId = null;
+  closeDetail();
+  activeTab = 'all';
+  renderSourcePicker();
+  // loadLeads() reads currentSource; all writes now also carry currentSource.
+  loadLeads();
+}
 
 function toggleSaleSort() {
   sortMode = sortMode === 'saledate' ? 'default' : 'saledate';
@@ -694,6 +748,7 @@ function doLookup() {
   document.getElementById('lookupResult').innerHTML = html;
 }
 
+renderSourcePicker();
 loadLeads();
 </script>
 
