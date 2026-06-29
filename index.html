@@ -136,8 +136,13 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .modal-title { font-size: 18px; font-weight: 800; margin-bottom: 16px; }
 .modal-close { width: 100%; padding: 14px; background: var(--card); border: 1px solid var(--border); border-radius: 12px; color: var(--text); font-size: 15px; font-weight: 700; cursor: pointer; margin-top: 12px; }
 .empty { text-align: center; padding: 60px 20px; color: var(--muted); font-size: 15px; }
-.sms-preview { background: var(--card); border: 1px solid var(--accent); border-radius: 12px; padding: 14px; margin-bottom: 14px; font-size: 14px; line-height: 1.6; color: var(--text); }
-.sms-preview-label { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: var(--accent); margin-bottom: 8px; }
+.tmpl-backdrop { position: fixed; inset: 0; z-index: 300; display: none; }
+.tmpl-backdrop.open { display: block; }
+.tmpl-menu { position: fixed; z-index: 301; display: none; background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 14px; padding: 6px; min-width: 240px; max-width: 320px; box-shadow: 0 12px 32px rgba(0,0,0,0.55); }
+.tmpl-menu.open { display: block; }
+.tmpl-head { font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #8A8A8E; padding: 8px 12px 6px; }
+.tmpl-item { padding: 12px 14px; border-radius: 10px; color: #fff; font-size: 14px; font-weight: 600; cursor: pointer; }
+.tmpl-item:hover, .tmpl-item:active { background: #2D6BFF; }
 
 /* Connected app shell: Activity + Goals screens. Scoped dl- classes, operational dark palette. */
 .dl-bottom-nav { position: fixed; left: 0; right: 0; bottom: 0; height: 62px; background: #1A1A1C; border-top: 1px solid #2A2A2E; display: flex; z-index: 150; }
@@ -151,12 +156,6 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .dl-body { padding: 16px; }
 .dl-card { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 16px; padding: 16px; margin-bottom: 14px; }
 .dl-card-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #8A8A8E; margin-bottom: 14px; }
-.tx-cat { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #2D6BFF; margin: 22px 0 10px; }
-.tx-cat:first-child { margin-top: 0; }
-.tx-card { background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 16px; padding: 14px; margin-bottom: 12px; }
-.tx-text { font-size: 14px; line-height: 1.5; color: #E6E6EA; white-space: pre-wrap; }
-.tx-copy { margin-top: 12px; width: 100%; padding: 11px; border-radius: 12px; border: none; background: #2D6BFF; color: #fff; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; transition: background 0.15s; }
-.tx-copy.copied { background: #34C759; }
 .dl-rings { display: flex; gap: 10px; justify-content: space-around; }
 .dl-ring { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .dl-ring-label { font-size: 11px; color: #8A8A8E; font-weight: 700; text-align: center; line-height: 1.4; }
@@ -233,19 +232,9 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
 </div>
 
-<!-- SMS Template Modal -->
-<div class="modal" id="smsModal">
-  <div class="modal-box">
-    <div class="modal-title">💬 Text Follow-Up</div>
-    <div class="sms-preview">
-      <div class="sms-preview-label">Message Preview</div>
-      <div id="smsPreviewText"></div>
-    </div>
-    <div style="font-size:12px;color:var(--muted);margin-bottom:14px">Review before sending. Tap Send to open iMessage with this pre-filled.</div>
-    <button class="save-btn" id="smsSendBtn" onclick="confirmSms()" style="margin-top:0">📱 Open iMessage</button>
-    <button class="modal-close" onclick="closeSmsModal()">Cancel</button>
-  </div>
-</div>
+<!-- Canned text template dropdown: anchored to the lead's Text button -->
+<div class="tmpl-backdrop" id="tmplBackdrop" onclick="closeTextMenu()"></div>
+<div class="tmpl-menu" id="tmplMenu"></div>
 
 <!-- Activity screen: real numbers only, computed from the loaded leads array via DLTA.adapter -->
 <div class="dl-screen" id="activityScreen">
@@ -265,21 +254,11 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div class="dl-body" id="goalsBody"></div>
 </div>
 
-<!-- Texts screen: categorized SMS templates with merge fields filled from the active lead -->
-<div class="dl-screen" id="textsScreen">
-  <div class="dl-screen-header">
-    <div class="dl-screen-title">Texts</div>
-    <div class="dl-screen-sub" id="textsSub">Tap Copy, then paste into Messages</div>
-  </div>
-  <div class="dl-body" id="textsBody"></div>
-</div>
-
 <!-- Bottom tab bar: show/hide screen divs, no router -->
 <div class="dl-bottom-nav">
   <button class="dl-nav-btn active" id="navLeads" onclick="showTab('leads')"><span class="dl-nav-ico">📋</span>Leads</button>
   <button class="dl-nav-btn" id="navActivity" onclick="showTab('activity')"><span class="dl-nav-ico">📊</span>Activity</button>
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
-  <button class="dl-nav-btn" id="navTexts" onclick="showTab('texts')"><span class="dl-nav-ico">💬</span>Texts</button>
 </div>
 
 <script>
@@ -287,8 +266,17 @@ var leads = [];
 var activeTab = 'all';
 var currentId = null;
 var saving = false;
-var pendingSmsNum = '';
-var pendingSmsMsg = '';
+var tmplPhone = '';
+
+// Canned SMS templates. {first_name} resolves from the lead owner_name (first
+// word) and {address} from address_street at selection time. Tokens stay
+// literal if the lead has no value, so the message is always sendable.
+var TEXT_TEMPLATES = [
+  { name: 'Pre-Foreclosure Intro', body: "Hi {first_name}, my name is [agent]. I specialize in helping homeowners in pre-foreclosure on {address}. If you want options before the sale date, call or text me back." },
+  { name: 'No Answer Follow-Up', body: "Hi {first_name}, I called about {address} but missed you. I work with homeowners facing foreclosure. Happy to talk through your options, no pressure." },
+  { name: 'Notice of Sale', body: "Hi {first_name}, I saw a notice of sale filed for {address}. There may still be time to avoid the auction. Call me if you want to know your options." },
+  { name: 'Short Sale', body: "Hi {first_name}, I help homeowners sell before foreclosure and avoid the judgment. If {address} is still available I would like to talk." }
+];
 
 var DOT = { new:'dot-new', called:'dot-called', callback:'dot-callback', appointment:'dot-appointment', notinterested:'dot-notinterested', dnc:'dot-dnc', listed:'dot-listed' };
 var PILL = { new:'pill-new', called:'pill-called', callback:'pill-callback', appointment:'pill-appointment', notinterested:'pill-notinterested', dnc:'pill-dnc', listed:'pill-listed' };
@@ -389,6 +377,7 @@ function loadLeads() {
           state: String(r.address_state || r.state || ''),
           zip: String(r.address_zip || r.zip || ''),
           phones: phones,
+          phone1: String(r.phone_1 || '').trim().replace(/\.0$/, ''),
           status: normalizeStatus(r.lead_status || r.call_status),
           notes: String(r.notes || ''),
           bestPhone: String(r.best_phone_number || ''),
@@ -580,7 +569,7 @@ function renderDetail() {
       phonesHtml += '<div class="phone-sub">' + contactLabel + (p.dnc ? ' · DNC' : '') + '</div></div>';
       phonesHtml += '<div class="ph-btns">';
       phonesHtml += '<button class="ph-btn ph-call" onclick="dial(\'' + p.number + '\')">📞</button>';
-      phonesHtml += '<button class="ph-btn ph-sms" onclick="openSmsModal(\'' + p.number + '\')">💬</button>';
+      phonesHtml += '<button class="ph-btn ph-sms" onclick="openTextMenu(event, this, \'' + p.number + '\')">💬</button>';
       phonesHtml += '</div></div>';
     }
   } else {
@@ -626,7 +615,7 @@ function renderDetail() {
 
   html += '<div class="action-grid">';
   html += '<button class="action-btn btn-call" onclick="dial(\'' + callNum + '\')"><span class="icon">📞</span>Call</button>';
-  html += '<button class="action-btn btn-text" onclick="openSmsModal(\'' + callNum + '\')"><span class="icon">💬</span>Text' + (l.textSent ? ' ✓' : '') + '</button>';
+  html += '<button class="action-btn btn-text" onclick="openTextMenu(event, this, \'\')"><span class="icon">💬</span>Text' + (l.textSent ? ' ✓' : '') + '</button>';
   html += '<button class="action-btn btn-map" onclick="window.open(\'' + mapsUrl + '\')"><span class="icon">📍</span>Map It</button>';
   html += '<button class="action-btn btn-door" onclick="logTouch(\'door knock\')"><span class="icon">🚪</span>Door Knock</button>';
   html += '<button class="action-btn btn-mail" onclick="logTouch(\'mail sent\')"><span class="icon">✉️</span>Mail Sent</button>';
@@ -647,38 +636,76 @@ function renderDetail() {
 
 function dial(num) { if (!num) return; window.location.href = 'tel:' + String(num).replace(/\D/g,''); }
 
-// ── SMS with pre-filled DLTA template ──
-function openSmsModal(num) {
-  if (!num) return;
+// ── Canned text templates: dropdown inside the lead ──
+// Tapping the Text button opens a menu of templates by name. Selecting one
+// resolves the merge fields and opens iOS Messages pre-filled. The phone is the
+// lead's best_phone_number, falling back to phone_1, unless a specific number
+// was passed (the per-phone text buttons).
+function openTextMenu(ev, anchor, num) {
+  if (ev) ev.stopPropagation();
   var l = getLead(currentId);
-  var firstName = l ? l.name.split(' ')[0] : 'there';
-  var address = l ? l.address : 'your property';
-  var msg = 'Hi ' + firstName + ', this is with Delta Real Estate. I just tried reaching you about ' + address + '. It came across my desk in pre-foreclosure and I wanted to make sure you know your options before the sale date. Most people don\'t realize they can avoid foreclosure AND walk away with cash. Can we talk 5 minutes? Call me back or reply to this text.';
-  pendingSmsNum = String(num).replace(/\D/g,'');
-  pendingSmsMsg = msg;
-  document.getElementById('smsPreviewText').textContent = msg;
-  document.getElementById('smsModal').classList.add('open');
+  var phone = String(num || '').replace(/\D/g, '');
+  if (!phone) phone = bestTextNumber(l);
+  if (!phone) return;
+  tmplPhone = phone;
+
+  var html = '<div class="tmpl-head">Send template</div>';
+  for (var i = 0; i < TEXT_TEMPLATES.length; i++) {
+    html += '<div class="tmpl-item" onclick="pickTemplate(' + i + ')">' + TEXT_TEMPLATES[i].name + '</div>';
+  }
+  var menu = document.getElementById('tmplMenu');
+  menu.innerHTML = html;
+  document.getElementById('tmplBackdrop').classList.add('open');
+  menu.classList.add('open');
+  positionTextMenu(menu, anchor);
 }
 
-function confirmSms() {
-  // Open iMessage with pre-filled body
-  window.location.href = 'sms:' + pendingSmsNum + '?body=' + encodeURIComponent(pendingSmsMsg);
-  // Mark text_sent in sheet and locally
+// Places the menu under the button, clamped to the viewport.
+function positionTextMenu(menu, anchor) {
+  if (!anchor) return;
+  var r = anchor.getBoundingClientRect();
+  var mw = menu.offsetWidth, mh = menu.offsetHeight;
+  var left = Math.min(r.left, window.innerWidth - mw - 8);
+  if (left < 8) left = 8;
+  var top = r.bottom + 6;
+  if (top + mh > window.innerHeight - 8) top = Math.max(8, r.top - mh - 6);
+  menu.style.left = left + 'px';
+  menu.style.top = top + 'px';
+}
+
+// best_phone_number, then phone_1.
+function bestTextNumber(l) {
+  if (!l) return '';
+  return String(l.bestPhone || l.phone1 || '').replace(/\D/g, '');
+}
+
+// Replaces {first_name} (owner_name first word) and {address} (address_street).
+// Leaves a token literal when the lead has no value for it.
+function resolveTemplate(body, l) {
+  var firstName = (l && l.name) ? l.name.split(' ')[0] : '';
+  if (firstName) body = body.split('{first_name}').join(firstName);
+  if (l && l.address) body = body.split('{address}').join(l.address);
+  return body;
+}
+
+function pickTemplate(idx) {
   var l = getLead(currentId);
+  var body = resolveTemplate(TEXT_TEMPLATES[idx].body, l);
+  closeTextMenu();
+  window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
   if (l) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
     l.textSentTimestamp = ts;
     saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
+    renderDetail();
   }
-  closeSmsModal();
-  renderDetail();
 }
 
-function closeSmsModal() {
-  document.getElementById('smsModal').classList.remove('open');
-  pendingSmsNum = '';
-  pendingSmsMsg = '';
+function closeTextMenu() {
+  document.getElementById('tmplBackdrop').classList.remove('open');
+  document.getElementById('tmplMenu').classList.remove('open');
+  tmplPhone = '';
 }
 
 function dialBest() { dial(document.getElementById('bestPhoneInput').value); }
@@ -881,14 +908,11 @@ function showTab(name) {
   document.getElementById('listView').style.display = (name === 'leads') ? 'block' : 'none';
   document.getElementById('activityScreen').style.display = (name === 'activity') ? 'block' : 'none';
   document.getElementById('goalsScreen').style.display = (name === 'goals') ? 'block' : 'none';
-  document.getElementById('textsScreen').style.display = (name === 'texts') ? 'block' : 'none';
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
   _setNav('navGoals', name === 'goals');
-  _setNav('navTexts', name === 'texts');
   if (name === 'activity') renderActivity();
   if (name === 'goals') renderGoals();
-  if (name === 'texts') renderTexts();
   window.scrollTo(0, 0);
 }
 function _setNav(id, on) { var e = document.getElementById(id); if (e) e.className = 'dl-nav-btn' + (on ? ' active' : ''); }
@@ -1058,99 +1082,6 @@ function computeGoals() {
       badge.innerHTML = '<span class="dl-badge blue">' + gap + ' more dials per day to reach goal</span>';
     }
   }
-}
-
-// ── Texts screen: canned SMS templates with merge fields ──
-// Raw templates keep the {first_name} and {address} tokens. They are resolved
-// against the active dialer lead at render and copy time so the text always
-// reflects whoever is open. With no active lead the tokens stay literal so the
-// template is still copyable.
-var TEXT_TEMPLATES = [
-  { category: 'Pre-Foreclosure Intro', templates: [
-    "Hi {first_name}, my name is [agent]. I specialize in helping homeowners in pre-foreclosure on {address}. If you want options before the sale date, call or text me back."
-  ] },
-  { category: 'No Answer Follow-Up', templates: [
-    "Hi {first_name}, I called about {address} but missed you. I work with homeowners facing foreclosure. Happy to talk through your options, no pressure."
-  ] },
-  { category: 'Notice of Sale', templates: [
-    "Hi {first_name}, I saw a notice of sale filed for {address}. There may still be time to avoid the auction. Call me if you want to know your options."
-  ] },
-  { category: 'Short Sale', templates: [
-    "Hi {first_name}, I help homeowners sell before foreclosure and avoid the judgment. If {address} is still available I'd like to talk."
-  ] }
-];
-
-// Fills merge fields from the active lead (currentId). Returns the raw tokens
-// untouched when no lead is active so the placeholder text stays visible.
-function resolveTemplate(text) {
-  var l = (typeof currentId !== 'undefined') ? getLead(currentId) : null;
-  if (l) {
-    var firstName = (l.name || '').split(' ')[0];
-    if (firstName) text = text.split('{first_name}').join(firstName);
-    if (l.address) text = text.split('{address}').join(l.address);
-  }
-  return text;
-}
-
-function renderTexts() {
-  var body = document.getElementById('textsBody');
-  if (!body) return;
-  var l = (typeof currentId !== 'undefined') ? getLead(currentId) : null;
-  var sub = document.getElementById('textsSub');
-  if (sub) sub.textContent = l ? ('Filled for ' + l.name) : 'No lead open. Placeholders shown as-is.';
-  var html = '';
-  for (var c = 0; c < TEXT_TEMPLATES.length; c++) {
-    var group = TEXT_TEMPLATES[c];
-    html += '<div class="tx-cat">' + escapeHtml(group.category) + '</div>';
-    for (var t = 0; t < group.templates.length; t++) {
-      var resolved = resolveTemplate(group.templates[t]);
-      html += '<div class="tx-card">';
-      html += '<div class="tx-text">' + escapeHtml(resolved) + '</div>';
-      html += '<button class="tx-copy" onclick="copyTemplate(this,' + c + ',' + t + ')">Copy</button>';
-      html += '</div>';
-    }
-  }
-  body.innerHTML = html;
-}
-
-function escapeHtml(s) {
-  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
-}
-
-// Copies the freshly resolved template and flashes the button green for 1.5s.
-function copyTemplate(btn, c, t) {
-  var text = resolveTemplate(TEXT_TEMPLATES[c].templates[t]);
-  copyToClipboard(text);
-  if (btn._txTimer) { clearTimeout(btn._txTimer); }
-  btn.classList.add('copied');
-  btn.textContent = 'Copied';
-  btn._txTimer = setTimeout(function () {
-    btn.classList.remove('copied');
-    btn.textContent = 'Copy';
-    btn._txTimer = null;
-  }, 1500);
-}
-
-// Clipboard write with a hidden-textarea fallback for older in-app webviews.
-function copyToClipboard(text) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(text)['catch'](function () { _legacyCopy(text); });
-  } else {
-    _legacyCopy(text);
-  }
-}
-function _legacyCopy(text) {
-  try {
-    var ta = document.createElement('textarea');
-    ta.value = text;
-    ta.setAttribute('readonly', '');
-    ta.style.position = 'absolute';
-    ta.style.left = '-9999px';
-    document.body.appendChild(ta);
-    ta.select();
-    document.execCommand('copy');
-    document.body.removeChild(ta);
-  } catch (e) {}
 }
 
 // Refresh Activity when the leads load completes while that tab is open.
