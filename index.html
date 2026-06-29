@@ -188,6 +188,9 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .dl-badge { display: inline-block; font-size: 13px; font-weight: 800; padding: 8px 16px; border-radius: 24px; margin-top: 12px; }
 .dl-badge.green { background: #0E2A14; color: #34C759; border: 1px solid #34C759; }
 .dl-badge.blue { background: #0F1A35; color: #2D6BFF; border: 1px solid #2D6BFF; }
+.dl-forms-wrap { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
+.dl-open-forms { background: #2D6BFF; color: #fff; border: none; border-radius: 14px; padding: 16px 32px; font-size: 16px; font-weight: 800; cursor: pointer; font-family: inherit; }
+.dl-open-forms:active { background: #2459d6; }
 </style>
 </head>
 <body>
@@ -254,11 +257,25 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div class="dl-body" id="goalsBody"></div>
 </div>
 
+<!-- Forms screen: single fallback button that opens the external forms site -->
+<div class="dl-screen" id="formsScreen">
+  <div class="dl-screen-header">
+    <div class="dl-screen-title">Forms</div>
+    <div class="dl-screen-sub">DLTA forms, opened in your browser</div>
+  </div>
+  <div class="dl-body">
+    <div class="dl-forms-wrap">
+      <button class="dl-open-forms" onclick="openForms()">Open Forms</button>
+    </div>
+  </div>
+</div>
+
 <!-- Bottom tab bar: show/hide screen divs, no router -->
 <div class="dl-bottom-nav">
   <button class="dl-nav-btn active" id="navLeads" onclick="showTab('leads')"><span class="dl-nav-ico">📋</span>Leads</button>
   <button class="dl-nav-btn" id="navActivity" onclick="showTab('activity')"><span class="dl-nav-ico">📊</span>Activity</button>
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
+  <button class="dl-nav-btn" id="navForms" onclick="openForms()"><span class="dl-nav-ico">📄</span>Forms</button>
 </div>
 
 <script>
@@ -908,6 +925,7 @@ function showTab(name) {
   document.getElementById('listView').style.display = (name === 'leads') ? 'block' : 'none';
   document.getElementById('activityScreen').style.display = (name === 'activity') ? 'block' : 'none';
   document.getElementById('goalsScreen').style.display = (name === 'goals') ? 'block' : 'none';
+  document.getElementById('formsScreen').style.display = (name === 'forms') ? 'block' : 'none';
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
   _setNav('navGoals', name === 'goals');
@@ -916,6 +934,14 @@ function showTab(name) {
   window.scrollTo(0, 0);
 }
 function _setNav(id, on) { var e = document.getElementById(id); if (e) e.className = 'dl-nav-btn' + (on ? ' active' : ''); }
+
+// Opens the external forms site in a new browser tab. If the browser blocks
+// the popup, fall back to the Forms screen so its "Open Forms" button is in
+// reach for a manual tap.
+function openForms() {
+  var w = window.open('https://forms.dltaleads.com', '_blank', 'noopener');
+  if (!w) showTab('forms');
+}
 
 // Infers load state from the data and the existing dialer DOM, without
 // changing any dialer behavior.
