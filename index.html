@@ -151,6 +151,12 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .dl-body { padding: 16px; }
 .dl-card { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 16px; padding: 16px; margin-bottom: 14px; }
 .dl-card-label { font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #8A8A8E; margin-bottom: 14px; }
+.tx-cat { font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; color: #2D6BFF; margin: 22px 0 10px; }
+.tx-cat:first-child { margin-top: 0; }
+.tx-card { background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 16px; padding: 14px; margin-bottom: 12px; }
+.tx-text { font-size: 14px; line-height: 1.5; color: #E6E6EA; white-space: pre-wrap; }
+.tx-copy { margin-top: 12px; width: 100%; padding: 11px; border-radius: 12px; border: none; background: #2D6BFF; color: #fff; font-size: 14px; font-weight: 800; font-family: inherit; cursor: pointer; transition: background 0.15s; }
+.tx-copy.copied { background: #34C759; }
 .dl-rings { display: flex; gap: 10px; justify-content: space-around; }
 .dl-ring { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 8px; }
 .dl-ring-label { font-size: 11px; color: #8A8A8E; font-weight: 700; text-align: center; line-height: 1.4; }
@@ -259,11 +265,21 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div class="dl-body" id="goalsBody"></div>
 </div>
 
+<!-- Texts screen: categorized SMS templates with merge fields filled from the active lead -->
+<div class="dl-screen" id="textsScreen">
+  <div class="dl-screen-header">
+    <div class="dl-screen-title">Texts</div>
+    <div class="dl-screen-sub" id="textsSub">Tap Copy, then paste into Messages</div>
+  </div>
+  <div class="dl-body" id="textsBody"></div>
+</div>
+
 <!-- Bottom tab bar: show/hide screen divs, no router -->
 <div class="dl-bottom-nav">
   <button class="dl-nav-btn active" id="navLeads" onclick="showTab('leads')"><span class="dl-nav-ico">📋</span>Leads</button>
   <button class="dl-nav-btn" id="navActivity" onclick="showTab('activity')"><span class="dl-nav-ico">📊</span>Activity</button>
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
+  <button class="dl-nav-btn" id="navTexts" onclick="showTab('texts')"><span class="dl-nav-ico">💬</span>Texts</button>
 </div>
 
 <script>
@@ -865,11 +881,14 @@ function showTab(name) {
   document.getElementById('listView').style.display = (name === 'leads') ? 'block' : 'none';
   document.getElementById('activityScreen').style.display = (name === 'activity') ? 'block' : 'none';
   document.getElementById('goalsScreen').style.display = (name === 'goals') ? 'block' : 'none';
+  document.getElementById('textsScreen').style.display = (name === 'texts') ? 'block' : 'none';
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
   _setNav('navGoals', name === 'goals');
+  _setNav('navTexts', name === 'texts');
   if (name === 'activity') renderActivity();
   if (name === 'goals') renderGoals();
+  if (name === 'texts') renderTexts();
   window.scrollTo(0, 0);
 }
 function _setNav(id, on) { var e = document.getElementById(id); if (e) e.className = 'dl-nav-btn' + (on ? ' active' : ''); }
@@ -1039,6 +1058,99 @@ function computeGoals() {
       badge.innerHTML = '<span class="dl-badge blue">' + gap + ' more dials per day to reach goal</span>';
     }
   }
+}
+
+// ── Texts screen: canned SMS templates with merge fields ──
+// Raw templates keep the {first_name} and {address} tokens. They are resolved
+// against the active dialer lead at render and copy time so the text always
+// reflects whoever is open. With no active lead the tokens stay literal so the
+// template is still copyable.
+var TEXT_TEMPLATES = [
+  { category: 'Pre-Foreclosure Intro', templates: [
+    "Hi {first_name}, my name is [agent]. I specialize in helping homeowners in pre-foreclosure on {address}. If you want options before the sale date, call or text me back."
+  ] },
+  { category: 'No Answer Follow-Up', templates: [
+    "Hi {first_name}, I called about {address} but missed you. I work with homeowners facing foreclosure. Happy to talk through your options, no pressure."
+  ] },
+  { category: 'Notice of Sale', templates: [
+    "Hi {first_name}, I saw a notice of sale filed for {address}. There may still be time to avoid the auction. Call me if you want to know your options."
+  ] },
+  { category: 'Short Sale', templates: [
+    "Hi {first_name}, I help homeowners sell before foreclosure and avoid the judgment. If {address} is still available I'd like to talk."
+  ] }
+];
+
+// Fills merge fields from the active lead (currentId). Returns the raw tokens
+// untouched when no lead is active so the placeholder text stays visible.
+function resolveTemplate(text) {
+  var l = (typeof currentId !== 'undefined') ? getLead(currentId) : null;
+  if (l) {
+    var firstName = (l.name || '').split(' ')[0];
+    if (firstName) text = text.split('{first_name}').join(firstName);
+    if (l.address) text = text.split('{address}').join(l.address);
+  }
+  return text;
+}
+
+function renderTexts() {
+  var body = document.getElementById('textsBody');
+  if (!body) return;
+  var l = (typeof currentId !== 'undefined') ? getLead(currentId) : null;
+  var sub = document.getElementById('textsSub');
+  if (sub) sub.textContent = l ? ('Filled for ' + l.name) : 'No lead open. Placeholders shown as-is.';
+  var html = '';
+  for (var c = 0; c < TEXT_TEMPLATES.length; c++) {
+    var group = TEXT_TEMPLATES[c];
+    html += '<div class="tx-cat">' + escapeHtml(group.category) + '</div>';
+    for (var t = 0; t < group.templates.length; t++) {
+      var resolved = resolveTemplate(group.templates[t]);
+      html += '<div class="tx-card">';
+      html += '<div class="tx-text">' + escapeHtml(resolved) + '</div>';
+      html += '<button class="tx-copy" onclick="copyTemplate(this,' + c + ',' + t + ')">Copy</button>';
+      html += '</div>';
+    }
+  }
+  body.innerHTML = html;
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// Copies the freshly resolved template and flashes the button green for 1.5s.
+function copyTemplate(btn, c, t) {
+  var text = resolveTemplate(TEXT_TEMPLATES[c].templates[t]);
+  copyToClipboard(text);
+  if (btn._txTimer) { clearTimeout(btn._txTimer); }
+  btn.classList.add('copied');
+  btn.textContent = 'Copied';
+  btn._txTimer = setTimeout(function () {
+    btn.classList.remove('copied');
+    btn.textContent = 'Copy';
+    btn._txTimer = null;
+  }, 1500);
+}
+
+// Clipboard write with a hidden-textarea fallback for older in-app webviews.
+function copyToClipboard(text) {
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(text)['catch'](function () { _legacyCopy(text); });
+  } else {
+    _legacyCopy(text);
+  }
+}
+function _legacyCopy(text) {
+  try {
+    var ta = document.createElement('textarea');
+    ta.value = text;
+    ta.setAttribute('readonly', '');
+    ta.style.position = 'absolute';
+    ta.style.left = '-9999px';
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+  } catch (e) {}
 }
 
 // Refresh Activity when the leads load completes while that tab is open.
