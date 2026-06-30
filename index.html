@@ -339,40 +339,149 @@ var currentId = null;
 var saving = false;
 var tmplPhone = '';
 
-// Approved canned SMS templates grouped by situation. resolveTemplate fills
-// {agent_name}, {company_name}, {first_name} (owner_name first word), and
-// {address} (address_street) at selection time.
+// Approved canned SMS templates grouped by situation. Each message is an object:
+//   id        - stable template_id used to reference the template (matches the
+//               v2 drip-sequence copy doc; keep these exact).
+//   label     - short text shown in the text-menu dropdown.
+//   image_url - optional attachment path (infographic / business card). These are
+//               placeholders; the asset files still need to be produced/hosted and
+//               the send logic does not attach them yet.
+//   body      - message copy. resolveTemplate fills {agent_name}, {company_name},
+//               {first_name} (owner_name first word), and {address} (the property
+//               address, written {PROPERTY_ADDRESS} in the copy doc) at selection time.
 var TEMPLATES = [
   {
     category: 'Notice of Sale',
     messages: [
-      'Hi, this is {agent_name} with {company_name}. If you received a Notice of Sale, it helps to first confirm the sale date and case details before deciding next steps.',
-      'A notice of sale does not always mean every option is gone. Confirm the date and case details before making decisions.',
-      'Do you know the scheduled sale date for the property? That date is the first thing to verify.'
+      {
+        id: 'nos_initial',
+        label: 'Step 1 · Initial Outreach',
+        image_url: '/assets/sms/notice_of_sale_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I noticed a Notice of Sale has been filed for {address}, and an auction date has been scheduled. Since the foreclosure process began, interest, late charges, attorney fees, court costs, and other expenses may have continued to accumulate. As those costs increase, they can reduce any remaining equity in the property. A Notice of Sale means the lender is preparing to sell the property at a public auction. Depending on your situation, there may still be options available before the sale takes place, but time becomes more limited as the auction date approaches. Are you aware of the scheduled sale date? If you\'d like to discuss your situation or better understand your options, please give me a call.'
+      },
+      {
+        id: 'nos_initial_short',
+        label: 'Step 1 · Initial (short)',
+        image_url: '/assets/sms/notice_of_sale_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I noticed a Notice of Sale was filed for {address}, and it looks like an auction date has been scheduled. Are you aware of the sale date? There may still be options before the auction, but time is limited. Give me a call when you have a chance, and I\'d be happy to discuss your situation.'
+      }
     ]
   },
   {
     category: 'Lis Pendens',
     messages: [
-      'Hi, this is {agent_name} with {company_name}. Lis pendens usually means a pending court case may affect the property. Do you have the case number?',
-      'If lis pendens appears on title, the next step is to identify the lawsuit behind it.',
-      'Can you share the property address and any court or recording information listed on the lis pendens notice?'
+      {
+        id: 'lp_initial_short',
+        label: 'Step 1 · Initial Outreach',
+        image_url: '/assets/sms/lis_pendens_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I noticed a Lis Pendens was filed regarding {address}, and I wanted to reach out. If you have a few minutes, could you give me a call? I\'d be happy to explain what it means and discuss what options may still be available.'
+      },
+      {
+        id: 'lp_initial_vshort',
+        label: 'Step 1 · Initial (shorter)',
+        image_url: '/assets/sms/lis_pendens_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I wanted to reach out regarding {address}. If you recently received notice of a Lis Pendens, I\'d be happy to answer any questions and explain what it means. When you have a chance, please give me a call.'
+      },
+      {
+        id: 'lp_missed_call',
+        label: 'Step 2 · Missed Call',
+        image_url: null,
+        body: 'I just tried calling regarding {address}. When you have a moment, could you please give me a call back? This is {agent_name} with {company_name}. My direct number is this one. I look forward to speaking with you.'
+      },
+      {
+        id: 'lp_voicemail_followup',
+        label: 'Step 2 · Voicemail Follow-Up',
+        image_url: null,
+        body: 'Hi, this is {agent_name} with {company_name}. I just left you a voicemail regarding {address}. No rush, but when you have a chance, I\'d appreciate a call back. If texting is easier, you\'re welcome to reply here as well.'
+      },
+      {
+        id: 'lp_educational',
+        label: 'Step 3 · Educational',
+        image_url: '/assets/sms/lis_pendens_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I work with homeowners throughout the area who are dealing with foreclosure situations. I recently became aware that a Lis Pendens was filed regarding {address}, and I wanted to make sure you understand what that means and what options may still be available. A Lis Pendens is the beginning of the foreclosure process, not the end. Depending on your situation, there may still be time to explore different paths before the process moves further. If you\'d like to talk through your situation or simply have questions, feel free to call or text me anytime.'
+      },
+      {
+        id: 'lp_educational_urgent',
+        label: 'Step 3 · Educational (urgent)',
+        image_url: null,
+        body: 'Hi, this is {agent_name} with {company_name}. I wanted to reach out because a Lis Pendens was recently filed for {address}. Many homeowners aren\'t aware that a Lis Pendens is only the beginning of the foreclosure process. Taking action early often provides more options than waiting until later in the process. If you\'d like to discuss your situation or simply understand your options, give me a call or send me a text anytime.'
+      },
+      {
+        id: 'lp_post_call',
+        label: 'Step 4 · Post-Call',
+        image_url: '/assets/sms/business_card.png',
+        body: 'It was great speaking with you today. This is {agent_name} with {company_name}. This is my direct number, so feel free to save it and call or text anytime if questions come up. I\'m here to help however I can.'
+      },
+      {
+        id: 'lp_numbers_a',
+        label: 'Step 5 · Numbers (A)',
+        image_url: '/assets/sms/lis_pendens_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. I noticed a Lis Pendens was filed regarding {address}, so I wanted to reach out. One of the first things I recommend is finding out two important numbers: the amount needed to bring the loan current (reinstatement), and the amount needed to pay the loan off in full (payoff). Those numbers help determine what options may be available and how much time there may be to work with. If you\'d like to discuss your situation, give me a call. I\'m happy to help.'
+      },
+      {
+        id: 'lp_numbers_b',
+        label: 'Step 5 · Numbers (B)',
+        image_url: '/assets/sms/business_card.png',
+        body: 'Hi, this is {agent_name} with {company_name}. If you\'ve recently received a Lis Pendens for {address}, don\'t panic, but don\'t ignore it either. One of the first steps is requesting a reinstatement quote and a payoff statement from your lender. Those figures often become the foundation for evaluating your available options. If you have questions or would like help understanding the process, feel free to call or text me anytime.'
+      },
+      {
+        id: 'lp_numbers_c',
+        label: 'Step 5 · Numbers (C)',
+        image_url: '/assets/sms/lis_pendens_infographic.png',
+        body: 'Hi, this is {agent_name} with {company_name}. A Lis Pendens doesn\'t necessarily mean you\'ve run out of options. The sooner you know what it takes to bring the loan current, and what it takes to satisfy the loan in full, the easier it becomes to evaluate possible solutions before the foreclosure process moves further. If you\'d like to talk through your situation, please give me a call.'
+      },
+      {
+        id: 'lp_checkin_week1',
+        label: 'Step 6 · Week-1 Check-In',
+        image_url: null,
+        body: 'Just checking in to see how things are going with {address}. If any questions have come up, feel free to call or text anytime. — {agent_name}, {company_name}'
+      }
     ]
   },
   {
     category: 'Probate',
     messages: [
-      'Hi, this is {agent_name} with {company_name}. If the property is part of an estate, we can help you identify which documents are needed to understand next steps.',
-      'For probate property, the key question is who has authority to act for the estate.',
-      'Do you have letters of office, a will, or any probate court paperwork for the property?'
+      {
+        id: 'probate_1',
+        label: 'Probate 1',
+        image_url: null,
+        body: 'Hi, this is {agent_name} with {company_name}. If the property is part of an estate, we can help you identify which documents are needed to understand next steps.'
+      },
+      {
+        id: 'probate_2',
+        label: 'Probate 2',
+        image_url: null,
+        body: 'For probate property, the key question is who has authority to act for the estate.'
+      },
+      {
+        id: 'probate_3',
+        label: 'Probate 3',
+        image_url: null,
+        body: 'Do you have letters of office, a will, or any probate court paperwork for the property?'
+      }
     ]
   },
   {
     category: 'Short Sale',
     messages: [
-      'Hi, this is {agent_name} with {company_name}. A short sale may be possible when the mortgage balance is higher than the sale price, but lender approval is required.',
-      'Do you know the current loan balance and estimated property value? Those are key short sale details.',
-      'If there is a foreclosure case, the court timeline matters for any short sale plan.'
+      {
+        id: 'short_sale_1',
+        label: 'Short Sale 1',
+        image_url: null,
+        body: 'Hi, this is {agent_name} with {company_name}. A short sale may be possible when the mortgage balance is higher than the sale price, but lender approval is required.'
+      },
+      {
+        id: 'short_sale_2',
+        label: 'Short Sale 2',
+        image_url: null,
+        body: 'Do you know the current loan balance and estimated property value? Those are key short sale details.'
+      },
+      {
+        id: 'short_sale_3',
+        label: 'Short Sale 3',
+        image_url: null,
+        body: 'If there is a foreclosure case, the court timeline matters for any short sale plan.'
+      }
     ]
   }
 ];
@@ -752,7 +861,9 @@ function openTextMenu(ev, anchor, num) {
   for (var c = 0; c < TEMPLATES.length; c++) {
     html += '<div class="tmpl-head">' + TEMPLATES[c].category + '</div>';
     for (var m = 0; m < TEMPLATES[c].messages.length; m++) {
-      html += '<div class="tmpl-item" onclick="pickTemplate(' + c + ',' + m + ')">' + TEMPLATES[c].category + ' ' + (m + 1) + '</div>';
+      var tmpl = TEMPLATES[c].messages[m];
+      var tmplLabel = tmpl.label || (TEMPLATES[c].category + ' ' + (m + 1));
+      html += '<div class="tmpl-item" onclick="pickTemplate(' + c + ',' + m + ')">' + tmplLabel + '</div>';
     }
   }
   var menu = document.getElementById('tmplMenu');
@@ -794,7 +905,10 @@ function resolveTemplate(body, l) {
 
 function pickTemplate(c, m) {
   var l = getLead(currentId);
-  var body = resolveTemplate(TEMPLATES[c].messages[m], l);
+  var tmpl = TEMPLATES[c].messages[m];
+  // tmpl.image_url is the optional attachment for this template. The send path
+  // below stays text-only for now; attaching the image is a future step.
+  var body = resolveTemplate(tmpl.body, l);
   closeTextMenu();
   window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
   if (l) {
