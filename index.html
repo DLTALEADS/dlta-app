@@ -908,56 +908,16 @@ function pickTemplate(c, m) {
   var tmpl = TEMPLATES[c].messages[m];
   var body = resolveTemplate(tmpl.body, l);
   closeTextMenu();
-
-  function logTextSent() {
-    if (!l) return;
+  window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
+  if (l) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
     l.textSentTimestamp = ts;
     saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
     renderDetail();
   }
-
-  function sendViaSmsLink() {
-    window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
-    logTextSent();
-  }
-
-  if (tmpl.image_url && navigator.canShare) {
-    // Probe whether this UA supports file sharing (iOS Safari: yes; desktop Chrome: no).
-    var canShareFiles = false;
-    try {
-      canShareFiles = navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] });
-    } catch (e) {}
-
-    if (canShareFiles) {
-      // Fetch the infographic/business-card asset, then open the native share
-      // sheet with text + image so the agent can route to Messages pre-filled.
-      fetch(tmpl.image_url)
-        .then(function(r) { return r.blob(); })
-        .then(function(blob) {
-          var filename = tmpl.image_url.split('/').pop();
-          var file = new File([blob], filename, { type: blob.type || 'image/png' });
-          // navigator.share() resolves on success; rejects on cancel (AbortError)
-          // or other errors. In either rejection case, do NOT open sms: — the
-          // share sheet was already shown and closing it is not a failed send.
-          navigator.share({ text: body, files: [file] })
-            .then(logTextSent)
-            .catch(function() { /* user dismissed or share failed — close silently */ });
-        })
-        .catch(function() {
-          // Image fetch failed before share was attempted — safe to fall back.
-          sendViaSmsLink();
-        });
-    } else {
-      // Files not supported in this browser (desktop, older Android) — text-only sms: link.
-      sendViaSmsLink();
-    }
-  } else {
-    // image_url is null, or Web Share API absent entirely.
-    sendViaSmsLink();
-  }
 }
+
 
 function closeTextMenu() {
   document.getElementById('tmplBackdrop').classList.remove('open');
