@@ -373,13 +373,13 @@ var TEMPLATES = [
       {
         id: 'lp_initial_short',
         label: 'Step 1 · Initial Outreach',
-        image_url: '/assets/sms/lis_pendens_infographic.png',
+        image_url: '/assets/sms/lis_pendens_vs_notice_of_sale.png',
         body: 'Hi, this is {agent_name} with {company_name}. I noticed a Lis Pendens was filed regarding {address}, and I wanted to reach out. If you have a few minutes, could you give me a call? I\'d be happy to explain what it means and discuss what options may still be available.'
       },
       {
         id: 'lp_initial_vshort',
         label: 'Step 1 · Initial (shorter)',
-        image_url: '/assets/sms/lis_pendens_infographic.png',
+        image_url: '/assets/sms/lis_pendens_vs_notice_of_sale.png',
         body: 'Hi, this is {agent_name} with {company_name}. I wanted to reach out regarding {address}. If you recently received notice of a Lis Pendens, I\'d be happy to answer any questions and explain what it means. When you have a chance, please give me a call.'
       },
       {
@@ -906,17 +906,56 @@ function resolveTemplate(body, l) {
 function pickTemplate(c, m) {
   var l = getLead(currentId);
   var tmpl = TEMPLATES[c].messages[m];
-  // tmpl.image_url is the optional attachment for this template. The send path
-  // below stays text-only for now; attaching the image is a future step.
   var body = resolveTemplate(tmpl.body, l);
   closeTextMenu();
-  window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
-  if (l) {
+
+  function logTextSent() {
+    if (!l) return;
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
     l.textSentTimestamp = ts;
     saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
     renderDetail();
+  }
+
+  function sendViaSmsLink() {
+    window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
+    logTextSent();
+  }
+
+  if (tmpl.image_url && navigator.canShare) {
+    // Probe whether this UA supports file sharing (iOS Safari: yes; desktop Chrome: no).
+    var canShareFiles = false;
+    try {
+      canShareFiles = navigator.canShare({ files: [new File([''], 'x.png', { type: 'image/png' })] });
+    } catch (e) {}
+
+    if (canShareFiles) {
+      // Fetch the infographic/business-card asset, then open the native share
+      // sheet with text + image so the agent can route to Messages pre-filled.
+      fetch(tmpl.image_url)
+        .then(function(r) { return r.blob(); })
+        .then(function(blob) {
+          var filename = tmpl.image_url.split('/').pop();
+          var file = new File([blob], filename, { type: blob.type || 'image/png' });
+          // navigator.share() resolves on success; rejects on cancel (AbortError)
+          // or other errors. In either rejection case, do NOT open sms: — the
+          // share sheet was already shown and closing it is not a failed send.
+          navigator.share({ text: body, files: [file] })
+            .then(logTextSent)
+            .catch(function() { /* user dismissed or share failed — close silently */ });
+        })
+        .catch(function() {
+          // Image fetch failed before share was attempted — safe to fall back.
+          sendViaSmsLink();
+        });
+    } else {
+      // Files not supported in this browser (desktop, older Android) — text-only sms: link.
+      sendViaSmsLink();
+    }
+  } else {
+    // image_url is null, or Web Share API absent entirely.
+    sendViaSmsLink();
   }
 }
 
