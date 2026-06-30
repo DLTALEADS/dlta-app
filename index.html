@@ -7,9 +7,6 @@
 <script>
   var API_KEY = 'AIzaSyDQLMYtGXu2phBO3twCN7YdqZaccO64CKo';
   var SHEET_ID = '1MlrW2RAdykKJFBbiIeNBlCwct7oepW_mrybhS3U1Wqw';
-  // Anthropic key for the Roleplay coach. Leave blank to be prompted on first
-  // use; the pasted key is held in sessionStorage for the current tab only.
-  var ANTHROPIC_API_KEY = '';
   // Lead sources the user can switch between. The id is the literal tab name,
   // used both for the Sheets read range and as the `sheet` param on every write,
   // so reads and writes always hit the same tab. Held in memory only.
@@ -1216,8 +1213,8 @@ function computeGoals() {
 
 // ── Roleplay coach ──────────────────────────────────────────────────────
 // AI plays a resistant pre-foreclosure seller. After each agent reply it
-// answers in character and adds a one-line COACH note. The Anthropic API is
-// called directly from the browser; the key lives in sessionStorage only.
+// answers in character and adds a one-line COACH note. Requests go through a
+// Cloudflare Worker that holds the Anthropic key server-side.
 
 var RP_SYSTEM = "You are playing a resistant homeowner in pre-foreclosure. " +
   "The person talking to you is a real estate agent trying to help. " +
@@ -1242,10 +1239,6 @@ var rpStarted = false;
 var rpLoading = false;
 var rpError = '';
 
-function rpGetKey() {
-  return ANTHROPIC_API_KEY || sessionStorage.getItem('rp_anthropic_key') || '';
-}
-
 function rpEsc(s) {
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;')
     .replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -1266,38 +1259,10 @@ function rpParseCoach(text) {
 }
 
 function renderRoleplay() {
-  if (!rpGetKey()) { rpRenderSetup(); return; }
   document.getElementById('rpComposer').style.display = 'flex';
   document.getElementById('rpResetBtn').style.display = '';
   if (!rpStarted) { rpStartScenario(); return; }
   rpRenderThread();
-}
-
-function rpRenderSetup() {
-  document.getElementById('rpComposer').style.display = 'none';
-  document.getElementById('rpResetBtn').style.display = 'none';
-  var thread = document.getElementById('rpThread');
-  thread.innerHTML =
-    '<div class="rp-setup">' +
-    '<h3>One-time setup</h3>' +
-    '<p>Paste your Anthropic API key to start the objection-handling coach. ' +
-    'It is kept only for this browser session and is never saved to the sheet.</p>' +
-    (rpError ? '<div class="rp-err">' + rpEsc(rpError) + '</div>' : '') +
-    '<input id="rpKeyInput" type="password" placeholder="sk-ant-..." autocomplete="off">' +
-    '<button onclick="rpSaveKey()">Save and start</button>' +
-    '</div>';
-  rpError = '';
-  var inp = document.getElementById('rpKeyInput');
-  if (inp) inp.focus();
-}
-
-function rpSaveKey() {
-  var inp = document.getElementById('rpKeyInput');
-  var key = inp ? inp.value.trim() : '';
-  if (!key) { rpError = 'Please paste a key first.'; rpRenderSetup(); return; }
-  sessionStorage.setItem('rp_anthropic_key', key);
-  rpStarted = false;
-  renderRoleplay();
 }
 
 function rpStartScenario() {
@@ -1380,14 +1345,10 @@ function rpCallApi() {
   rpLoading = true;
   rpRenderThread();
   var payload = rpMessages.map(function (m) { return { role: m.role, content: m.content }; });
-  fetch('https://api.anthropic.com/v1/messages', {
+  fetch('https://late-shadow-77ad.dltaleadsystem.workers.dev/', {
     method: 'POST',
     headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': rpGetKey(),
-      'anthropic-version': '2023-06-01',
-      // Required for browser-origin calls to clear the CORS preflight.
-      'anthropic-dangerous-direct-browser-access': 'true'
+      'Content-Type': 'application/json'
     },
     body: JSON.stringify({
       model: 'claude-haiku-4-5-20251001',
@@ -1416,13 +1377,6 @@ function rpCallApi() {
     .catch(function (err) {
       rpLoading = false;
       rpError = err.message || 'Could not reach the Anthropic API.';
-      // A bad key is the usual cause; let the agent re-enter it.
-      if (/401|authentication|invalid x-api-key/i.test(rpError)) {
-        sessionStorage.removeItem('rp_anthropic_key');
-        rpStarted = false;
-        rpRenderSetup();
-        return;
-      }
       rpRenderThread();
     });
 }
