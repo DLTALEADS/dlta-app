@@ -902,13 +902,13 @@ function resolveTemplate(body, l) {
   if (l && l.address) body = body.split('{address}').join(l.address);
   return body;
 }
-
 function pickTemplate(c, m) {
   var l = getLead(currentId);
   var tmpl = TEMPLATES[c].messages[m];
   var body = resolveTemplate(tmpl.body, l);
+  var phone = tmplPhone;
   closeTextMenu();
-  window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
+  window.location.href = 'sms:' + phone + '&body=' + encodeURIComponent(body);
   if (l) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
