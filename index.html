@@ -286,6 +286,10 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .appt-type-btn.sel-orange { border-color: #FF9F0A; color: #FF9F0A; background: #1a1200; }
 .appt-type-btn.sel-green { border-color: #34C759; color: #34C759; background: #0E2A14; }
 .appt-type-btn.sel-purple { border-color: #8B5CF6; color: #8B5CF6; background: #1a0a1f; }
+.cal-status-badge { display:inline-block; font-size:11px; font-weight:800; padding:3px 10px; border-radius:20px; margin-bottom:12px; }
+.cal-status-planned { background:#0F1A35; color:#2D6BFF; border:1px solid #2D6BFF; }
+.cal-status-held { background:#0E2A14; color:#34C759; border:1px solid #34C759; }
+.cal-status-notheld { background:#1a0808; color:#FF453A; border:1px solid #FF453A; }
 </style>
 </head>
 <body>
@@ -327,6 +331,18 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <input class="field-input" id="lookupInput" type="tel" placeholder="Enter phone number..." oninput="doLookup()">
     <div id="lookupResult" style="margin-top:16px"></div>
     <button class="modal-close" onclick="closeLookup()">Close</button>
+  </div>
+</div>
+
+<!-- Event detail modal: tap an existing event to view/update/cancel -->
+<div class="modal" id="calEventModal">
+  <div class="modal-box">
+    <div class="modal-title" id="calEvTitle"></div>
+    <div id="calEvStatus"></div>
+    <div id="calEvMeta" style="font-size:13px;color:#8A8A8E;margin-bottom:16px;line-height:1.6"></div>
+    <div id="calEvActions"></div>
+    <div id="calEvError" style="color:#FF453A;font-size:12px;margin-top:6px;display:none;line-height:1.4"></div>
+    <button class="modal-close" onclick="calCloseEventModal()">Close</button>
   </div>
 </div>
 
@@ -1634,18 +1650,21 @@ function rpCallApi() {
 
 // ── Calendar ─────────────────────────────────────────────────────────────────
 // Events come from two sources:
-//   1. EspoCRM Meeting entity via REST (when ESPO_API_KEY is set)
+//   1. EspoCRM Meeting + Call entities via REST (when ESPO_API_KEY is set)
 //   2. Lead follow_up_date fields from the already-loaded leads array
 // EspoCRM is the write target and source of truth for real appointments.
 // Follow-up events from leads are read-only overlays (orange, source='lead').
 
 var calView = 'month';
 var calDate = new Date();
-var calEvents = [];       // [{id, title, start, end, type, leadRow, source}]
+var calEvents = [];       // [{id, title, start, end, type, entity, status, leadRow, source}]
 var calLoading = false;
 var calError = '';
 var _apptLeadRow = null;  // set when modal is opened from a lead detail
 var _apptType = 'appointment';
+var calUserId = '';        // EspoCRM user ID for the current API key (fetched once)
+var _calUserFetched = false;
+var _calEvModal = null;    // currently-open event in detail modal
 
 var CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 var CAL_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
@@ -1675,13 +1694,47 @@ function _espoDateTime(d) {
     ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) + ':00';
 }
 
-// Infer event type from EspoCRM meeting name or description tag
+// Infer event type from EspoCRM name/description tag
 function _calGuessType(name, desc) {
   var t = (name + ' ' + (desc || '')).toLowerCase();
   if (t.indexOf('[type:followup]') !== -1 || t.indexOf('follow') !== -1 || t.indexOf('callback') !== -1) return 'followup';
   if (t.indexOf('[type:showing]') !== -1 || t.indexOf('showing') !== -1) return 'showing';
   if (t.indexOf('[type:block]') !== -1 || t.indexOf('block') !== -1 || t.indexOf('admin') !== -1 || t.indexOf('prospect') !== -1) return 'block';
   return 'appointment';
+}
+
+// Map a raw EspoCRM record to our internal event format
+function _calMapEvent(m, entity) {
+  var start = new Date(m.dateStart);
+  var end;
+  if (entity === 'Call') {
+    var durSec = m.duration || 3600;
+    end = new Date(start.getTime() + durSec * 1000);
+  } else {
+    end = m.dateEnd ? new Date(m.dateEnd) : null;
+  }
+  return {
+    id: m.id,
+    title: m.name || (entity === 'Call' ? 'Call' : 'Meeting'),
+    start: start,
+    end: end,
+    type: _calGuessType(m.name || '', m.description || ''),
+    entity: entity,
+    status: m.status || 'Planned',
+    source: 'espo'
+  };
+}
+
+// Fire-and-forget: fetch the EspoCRM user ID for this API key
+function _calFetchUserId() {
+  if (_calUserFetched || !ESPO_API_KEY) return;
+  _calUserFetched = true;
+  fetch(ESPO_URL + '/api/v1/App/user', {
+    headers: { 'X-Api-Key': ESPO_API_KEY }
+  })
+  .then(function(r) { if (!r.ok) throw new Error('status ' + r.status); return r.json(); })
+  .then(function(data) { if (data && data.id) calUserId = data.id; })
+  .catch(function() { /* non-fatal */ });
 }
 
 // Collect lead follow_up_date entries as calendar overlay events
@@ -1699,6 +1752,8 @@ function _calLeadFollowups() {
       start: new Date(ms),
       end: null,
       type: 'followup',
+      entity: null,
+      status: 'Planned',
       leadRow: l.row,
       source: 'lead'
     });
@@ -1728,10 +1783,42 @@ function _calRangeEnd() {
   return _espoDateTime(d).split(' ')[0] + ' 23:59:59';
 }
 
+// Dual fetch: parallel Meeting + Call queries merged when both complete
+function _calFetchDual(from, to) {
+  var qs = 'where[0][type]=between&where[0][attribute]=dateStart' +
+    '&where[0][value][]=' + encodeURIComponent(from) +
+    '&where[0][value][]=' + encodeURIComponent(to) +
+    '&maxSize=200&offset=0';
+  var results = [];
+  var done = 0;
+  var entities = ['Meeting', 'Call'];
+  for (var ei = 0; ei < entities.length; ei++) {
+    (function(entity) {
+      fetch(ESPO_URL + '/api/v1/' + entity + '?' + qs, {
+        headers: { 'X-Api-Key': ESPO_API_KEY }
+      })
+      .then(function(r) { if (!r.ok) throw new Error(entity + ' ' + r.status); return r.json(); })
+      .then(function(data) {
+        var list = data.list || [];
+        for (var i = 0; i < list.length; i++) results.push(_calMapEvent(list[i], entity));
+      })
+      .catch(function() { /* partial failure OK */ })
+      .then(function() {
+        done++;
+        if (done === entities.length) {
+          calEvents = results.concat(_calLeadFollowups());
+          calLoading = false;
+          _renderCalBody();
+        }
+      });
+    })(entities[ei]);
+  }
+}
+
 function calFetchEvents() {
+  _calFetchUserId();
   calError = '';
   if (!ESPO_API_KEY) {
-    // No API key — show lead follow-ups only
     calEvents = _calLeadFollowups();
     calLoading = false;
     _renderCalBody();
@@ -1740,29 +1827,22 @@ function calFetchEvents() {
   calLoading = true;
   _renderCalBody();
   var from = _calRangeStart(), to = _calRangeEnd();
-  var qs = 'where[0][type]=between&where[0][attribute]=dateStart' +
-    '&where[0][value][]=' + encodeURIComponent(from) +
-    '&where[0][value][]=' + encodeURIComponent(to) +
-    '&maxSize=200&offset=0';
-  fetch(ESPO_URL + '/api/v1/Meeting?' + qs, {
-    headers: { 'X-Api-Key': ESPO_API_KEY }
-  })
+  // Try unified Activities/calendar endpoint (EspoCRM v7.3+); 404 = older version
+  var acUrl = ESPO_URL + '/api/v1/Activities/calendar' +
+    '?from=' + encodeURIComponent(from) +
+    '&to=' + encodeURIComponent(to) +
+    (calUserId ? '&userIdList[]=' + encodeURIComponent(calUserId) : '') +
+    '&scopeList[]=Meeting&scopeList[]=Call';
+  fetch(acUrl, { headers: { 'X-Api-Key': ESPO_API_KEY } })
   .then(function(r) {
+    if (r.status === 404) { _calFetchDual(from, to); return null; }
     if (!r.ok) throw new Error('EspoCRM ' + r.status);
     return r.json();
   })
   .then(function(data) {
-    var list = data.list || [];
-    calEvents = list.map(function(m) {
-      return {
-        id: m.id,
-        title: m.name || 'Meeting',
-        start: new Date(m.dateStart),
-        end: m.dateEnd ? new Date(m.dateEnd) : null,
-        type: _calGuessType(m.name || '', m.description || ''),
-        source: 'espo'
-      };
-    });
+    if (data === null) return;
+    var list = Array.isArray(data) ? data : (data.list || []);
+    calEvents = list.map(function(m) { return _calMapEvent(m, m.entityType || 'Meeting'); });
     var fups = _calLeadFollowups();
     for (var i = 0; i < fups.length; i++) calEvents.push(fups[i]);
     calLoading = false;
@@ -1918,7 +1998,7 @@ function _renderWeekView() {
       for (var ei = 0; ei < evs.length; ei++) {
         var ev = evs[ei];
         if (ev.start && ev.start.getHours() === h) {
-          html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+          html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '" onclick="_calEvClick(event,\'' + _esc(ev.id) + '\')">'
             + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
             + '<div class="cal-event-time">' + _fmtTime(ev.start) + '</div></div>';
         }
@@ -1928,6 +2008,12 @@ function _renderWeekView() {
   }
   html += '</div></div>';
   return html;
+}
+
+// Stop click from bubbling to the slot's calDayTap handler
+function _calEvClick(e, evId) {
+  e.stopPropagation();
+  calOpenEventModal(evId);
 }
 
 // ── Day view ──────────────────────────────────────────────────────────────────
@@ -1947,7 +2033,7 @@ function _renderDayView() {
     for (var ei = 0; ei < slotEvs.length; ei++) {
       var ev = slotEvs[ei];
       hasAny = true;
-      html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+      html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '" onclick="calOpenEventModal(\'' + _esc(ev.id) + '\')">'
         + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
         + '<div class="cal-event-time">' + _fmtTime(ev.start) + (ev.end ? ' – ' + _fmtTime(ev.end) : '') + '</div>'
         + '</div>';
@@ -1957,6 +2043,83 @@ function _renderDayView() {
   if (!hasAny) html += '<div class="cal-state">No events — tap + to add one</div>';
   html += '</div>';
   return html;
+}
+
+// ── Event Detail Modal ────────────────────────────────────────────────────────
+function calOpenEventModal(evId) {
+  var ev = null;
+  for (var i = 0; i < calEvents.length; i++) {
+    if (calEvents[i].id === evId) { ev = calEvents[i]; break; }
+  }
+  if (!ev) return;
+  _calEvModal = ev;
+
+  document.getElementById('calEvTitle').textContent = ev.title;
+
+  var statusClass = { 'Planned':'cal-status-planned', 'Held':'cal-status-held', 'Not Held':'cal-status-notheld' };
+  var sc = statusClass[ev.status] || 'cal-status-planned';
+  document.getElementById('calEvStatus').innerHTML = '<span class="cal-status-badge ' + sc + '">' + _esc(ev.status || 'Planned') + '</span>';
+
+  var meta = '';
+  if (ev.start) meta += _fmtTime(ev.start) + (ev.end ? ' – ' + _fmtTime(ev.end) : '') + '<br>';
+  meta += (CAL_TYPE_LABEL[ev.type] || ev.type);
+  if (ev.entity) meta += ' (' + ev.entity + ')';
+  document.getElementById('calEvMeta').innerHTML = meta;
+
+  var actHtml = '';
+  if (ev.source === 'espo' && ESPO_API_KEY && ev.entity) {
+    if (ev.status !== 'Held') {
+      actHtml += '<button class="save-btn" style="background:#0E2A14;border:1px solid #34C759;color:#34C759;margin-bottom:8px" onclick="calUpdateEventStatus(\'Held\',this)">&#x2705; Mark Held</button>';
+    }
+    if (ev.status !== 'Not Held') {
+      actHtml += '<button class="save-btn" style="background:#1a0808;border:1px solid #FF453A;color:#FF453A;margin-bottom:8px" onclick="calUpdateEventStatus(\'Not Held\',this)">&#x2716; Mark Not Held</button>';
+    }
+    if (ev.status !== 'Planned') {
+      actHtml += '<button class="save-btn" style="background:#0F1A35;border:1px solid #2D6BFF;color:#2D6BFF;margin-bottom:8px" onclick="calUpdateEventStatus(\'Planned\',this)">&#x1F504; Reset to Planned</button>';
+    }
+  }
+  document.getElementById('calEvActions').innerHTML = actHtml;
+  document.getElementById('calEvError').style.display = 'none';
+  document.getElementById('calEventModal').classList.add('open');
+}
+
+function calCloseEventModal() {
+  document.getElementById('calEventModal').classList.remove('open');
+  _calEvModal = null;
+}
+
+function calUpdateEventStatus(status, btn) {
+  var ev = _calEvModal;
+  if (!ev || !ev.entity) return;
+  var errEl = document.getElementById('calEvError');
+  errEl.style.display = 'none';
+  btn.disabled = true;
+  var origText = btn.textContent;
+  btn.textContent = 'Saving…';
+
+  fetch(ESPO_URL + '/api/v1/' + ev.entity + '/' + ev.id, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': ESPO_API_KEY },
+    body: JSON.stringify({ status: status })
+  })
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error((e && e.message) || 'Update failed (' + r.status + ')'); });
+    return r.json();
+  })
+  .then(function() {
+    ev.status = status;
+    for (var i = 0; i < calEvents.length; i++) {
+      if (calEvents[i].id === ev.id) { calEvents[i].status = status; break; }
+    }
+    calCloseEventModal();
+    calOpenEventModal(ev.id);
+  })
+  .catch(function(err) {
+    btn.disabled = false;
+    btn.textContent = origText;
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  });
 }
 
 // ── Add Appointment Modal ─────────────────────────────────────────────────────
@@ -2024,9 +2187,10 @@ function calSaveAppt() {
   var startDt = new Date(dateStart);
   var endDt   = new Date(startDt.getTime() + duration * 60000);
 
-  // Optimistically add to local events so the calendar updates immediately
+  // Optimistic local event
   var localId = 'pending-' + Date.now();
-  var localEv = { id: localId, title: title, start: startDt, end: endDt, type: _apptType, leadRow: _apptLeadRow, source: 'espo' };
+  var entity = (_apptType === 'followup') ? 'Call' : 'Meeting';
+  var localEv = { id: localId, title: title, start: startDt, end: endDt, type: _apptType, entity: entity, status: 'Planned', leadRow: _apptLeadRow, source: 'espo' };
   calEvents.push(localEv);
 
   // If it's a follow-up, also write follow_up_date back to the sheet
@@ -2051,15 +2215,37 @@ function calSaveAppt() {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
-  var payload = {
-    name: title,
-    dateStart: _espoDateTime(startDt),
-    dateEnd: _espoDateTime(endDt),
-    status: 'Planned',
-    description: notes + (notes ? '\n' : '') + '[type:' + _apptType + ']' + (_apptLeadRow ? '\n[leadRow:' + _apptLeadRow + ']' : '')
-  };
+  var reminders = [{ type: 'Popup', seconds: 900 }, { type: 'Email', seconds: 3600 }];
+  var usersIds = calUserId ? [calUserId] : [];
+  var descTag = (notes ? notes + '\n' : '') + '[type:' + _apptType + ']' + (_apptLeadRow ? '\n[leadRow:' + _apptLeadRow + ']' : '');
 
-  fetch(ESPO_URL + '/api/v1/Meeting', {
+  var payload, endpoint;
+  if (_apptType === 'followup') {
+    payload = {
+      name: title,
+      dateStart: _espoDateTime(startDt),
+      duration: duration * 60,
+      direction: 'Outbound',
+      status: 'Planned',
+      description: descTag,
+      reminders: reminders,
+      usersIds: usersIds
+    };
+    endpoint = ESPO_URL + '/api/v1/Call';
+  } else {
+    payload = {
+      name: title,
+      dateStart: _espoDateTime(startDt),
+      dateEnd: _espoDateTime(endDt),
+      status: 'Planned',
+      description: descTag,
+      reminders: reminders,
+      usersIds: usersIds
+    };
+    endpoint = ESPO_URL + '/api/v1/Meeting';
+  }
+
+  fetch(endpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-Api-Key': ESPO_API_KEY },
     body: JSON.stringify(payload)
