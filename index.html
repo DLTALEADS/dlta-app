@@ -227,7 +227,20 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .rp-setup button { width: 100%; padding: 13px; background: #2D6BFF; border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
 .rp-setup .rp-err { color: #FF9F0A; font-size: 12px; margin-bottom: 10px; }
 .rp-state { margin: auto; text-align: center; color: #8A8A8E; font-size: 14px; padding: 30px; }
+
+/* Calendar screen */
+#calendarScreen { display: none; background: #0A0A0B; }
+#calEl { padding: 0 12px 16px; }
+.fc { --fc-border-color: #2A2A2E; --fc-button-bg-color: #1A1A1C; --fc-button-active-bg-color: #2D6BFF; --fc-button-hover-bg-color: #2A2A2E; --fc-button-border-color: #2A2A2E; --fc-button-hover-border-color: #2A2A2E; --fc-button-active-border-color: #2D6BFF; --fc-button-text-color: #F1F1F3; --fc-today-bg-color: rgba(45,107,255,0.12); --fc-page-bg-color: #0A0A0B; --fc-neutral-bg-color: #1A1A1C; }
+.fc-theme-standard td, .fc-theme-standard th, .fc-theme-standard .fc-scrollgrid { border-color: #2A2A2E; }
+.fc-col-header-cell-cushion, .fc-daygrid-day-number { color: #8A8A8E; text-decoration: none; }
+.fc-daygrid-day.fc-day-today .fc-daygrid-day-number { color: #2D6BFF; font-weight: 800; }
+.fc .fc-toolbar-title { font-size: 17px; font-weight: 800; color: #F1F1F3; }
+.fc .fc-button { font-size: 12px; font-weight: 700; padding: 5px 10px; }
+.fc-event { border-radius: 6px; font-size: 12px; }
 </style>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.css">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.3/main.min.js"></script>
 </head>
 <body>
 
@@ -306,6 +319,34 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
 </div>
 
+<!-- Calendar screen: EspoCRM Meetings via Cloudflare Worker proxy -->
+<div class="dl-screen" id="calendarScreen">
+  <div class="dl-screen-header" style="display:flex;align-items:center;justify-content:space-between">
+    <div>
+      <div class="dl-screen-title">Calendar</div>
+      <div class="dl-screen-sub">Appointments synced with EspoCRM</div>
+    </div>
+    <button onclick="calOpenNew(null)" style="background:#2D6BFF;border:none;border-radius:10px;padding:8px 16px;color:#fff;font-size:13px;font-weight:700;cursor:pointer;font-family:inherit">+ New</button>
+  </div>
+  <div id="calEl"></div>
+</div>
+
+<!-- Create / edit meeting modal -->
+<div class="modal" id="calModal">
+  <div class="modal-box">
+    <div class="modal-title" id="calModalTitle">New Appointment</div>
+    <input class="field-input" id="calName" placeholder="Subject..." style="margin-bottom:10px">
+    <input class="field-input" id="calStart" type="datetime-local" style="margin-bottom:10px">
+    <input class="field-input" id="calEnd" type="datetime-local" style="margin-bottom:10px">
+    <textarea class="field-input" id="calDesc" placeholder="Notes..." rows="3" style="margin-bottom:10px;resize:none;min-height:0"></textarea>
+    <button class="save-btn" id="calSaveBtn" onclick="calSave()">Save Appointment</button>
+    <div id="calDeleteWrap" style="display:none;margin-top:10px">
+      <button onclick="calDelete()" style="width:100%;padding:14px;background:#1a0808;border:1px solid var(--red);border-radius:12px;color:var(--red);font-size:14px;font-weight:700;cursor:pointer;font-family:inherit">Delete Appointment</button>
+    </div>
+    <button class="modal-close" onclick="calModalClose()">Cancel</button>
+  </div>
+</div>
+
 <!-- Roleplay screen: AI objection-handling coach. Calls the Anthropic API
      directly from the browser using the session-stored key. -->
 <div class="dl-screen" id="roleplayScreen">
@@ -330,6 +371,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
   <button class="dl-nav-btn" id="navForms" onclick="openForms()"><span class="dl-nav-ico">📄</span>Forms</button>
   <button class="dl-nav-btn" id="navRoleplay" onclick="showTab('roleplay')"><span class="dl-nav-ico">🎙️</span>Roleplay</button>
+  <button class="dl-nav-btn" id="navCalendar" onclick="showTab('calendar')"><span class="dl-nav-ico">📅</span>Calendar</button>
 </div>
 
 <script>
@@ -1127,13 +1169,16 @@ function showTab(name) {
   document.getElementById('goalsScreen').style.display = (name === 'goals') ? 'block' : 'none';
   document.getElementById('formsScreen').style.display = (name === 'forms') ? 'block' : 'none';
   document.getElementById('roleplayScreen').style.display = (name === 'roleplay') ? 'flex' : 'none';
+  document.getElementById('calendarScreen').style.display = (name === 'calendar') ? 'block' : 'none';
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
   _setNav('navGoals', name === 'goals');
   _setNav('navRoleplay', name === 'roleplay');
+  _setNav('navCalendar', name === 'calendar');
   if (name === 'activity') renderActivity();
   if (name === 'goals') renderGoals();
   if (name === 'roleplay') renderRoleplay();
+  if (name === 'calendar') calShow();
   window.scrollTo(0, 0);
 }
 function _setNav(id, on) { var e = document.getElementById(id); if (e) e.className = 'dl-nav-btn' + (on ? ' active' : ''); }
@@ -1492,6 +1537,138 @@ function rpCallApi() {
       rpError = err.message || 'Could not reach the Anthropic API.';
       rpRenderThread();
     });
+}
+
+// ── Calendar / EspoCRM sync ─────────────────────────────────────────────────
+// Reads and writes EspoCRM Meetings through the Cloudflare Worker proxy.
+// The Worker injects ESPO_API_KEY as X-Api-Key; no credential touches the repo.
+var CAL_WORKER = 'https://late-shadow-77ad.dltaleadsystem.workers.dev';
+var calInstance = null;
+var calEditId = null;
+
+function espoReq(path, opts) {
+  return fetch(CAL_WORKER + '/espo/' + path, opts || {});
+}
+
+function toEspoUTC(d) {
+  if (!(d instanceof Date)) d = new Date(d);
+  function p(n) { return String(n).padStart(2, '0'); }
+  return d.getUTCFullYear() + '-' + p(d.getUTCMonth()+1) + '-' + p(d.getUTCDate()) +
+    ' ' + p(d.getUTCHours()) + ':' + p(d.getUTCMinutes()) + ':00';
+}
+
+function toInputDT(d) {
+  if (!(d instanceof Date)) d = new Date(d);
+  function p(n) { return String(n).padStart(2, '0'); }
+  return d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+    'T' + p(d.getHours()) + ':' + p(d.getMinutes());
+}
+
+function calShow() {
+  if (calInstance) { calInstance.updateSize(); return; }
+  calInstance = new FullCalendar.Calendar(document.getElementById('calEl'), {
+    initialView: 'dayGridMonth',
+    headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
+    height: 'auto',
+    events: function(info, successCb, failureCb) {
+      var s = toEspoUTC(info.start);
+      var e = toEspoUTC(info.end);
+      var q = 'maxSize=200&where[0][type]=between&where[0][attribute]=dateStart' +
+        '&where[0][value][0]=' + encodeURIComponent(s) +
+        '&where[0][value][1]=' + encodeURIComponent(e);
+      espoReq('Meeting?' + q)
+        .then(function(r) { return r.json(); })
+        .then(function(data) {
+          successCb((data.list || []).map(function(m) {
+            return {
+              id: m.id,
+              title: m.name,
+              start: m.dateStart ? m.dateStart.replace(' ', 'T') + 'Z' : null,
+              end: m.dateEnd ? m.dateEnd.replace(' ', 'T') + 'Z' : null,
+              color: m.status === 'Held' ? '#16a34a' : m.status === 'Not Held' ? '#dc2626' : '#2563eb',
+              extendedProps: { desc: m.description || '', status: m.status }
+            };
+          }));
+        })
+        .catch(failureCb);
+    },
+    dateClick: function(info) { calOpenNew(info.date); },
+    eventClick: function(info) { calOpenEdit(info.event); }
+  });
+  calInstance.render();
+}
+
+function calOpenNew(date) {
+  calEditId = null;
+  document.getElementById('calModalTitle').textContent = 'New Appointment';
+  document.getElementById('calName').value = '';
+  var start = date || new Date();
+  document.getElementById('calStart').value = toInputDT(start);
+  var end = new Date(start); end.setMinutes(end.getMinutes() + 30);
+  document.getElementById('calEnd').value = toInputDT(end);
+  document.getElementById('calDesc').value = '';
+  document.getElementById('calDeleteWrap').style.display = 'none';
+  document.getElementById('calModal').classList.add('open');
+}
+
+function calOpenEdit(event) {
+  calEditId = event.id;
+  document.getElementById('calModalTitle').textContent = 'Edit Appointment';
+  document.getElementById('calName').value = event.title || '';
+  document.getElementById('calStart').value = event.start ? toInputDT(event.start) : '';
+  document.getElementById('calEnd').value = event.end ? toInputDT(event.end) : '';
+  document.getElementById('calDesc').value = (event.extendedProps && event.extendedProps.desc) || '';
+  document.getElementById('calDeleteWrap').style.display = 'block';
+  document.getElementById('calModal').classList.add('open');
+}
+
+function calModalClose() {
+  document.getElementById('calModal').classList.remove('open');
+  calEditId = null;
+}
+
+function calSave() {
+  var name = document.getElementById('calName').value.trim();
+  if (!name) { alert('Subject is required.'); return; }
+  var startVal = document.getElementById('calStart').value;
+  if (!startVal) { alert('Start time is required.'); return; }
+  var endVal = document.getElementById('calEnd').value;
+  var btn = document.getElementById('calSaveBtn');
+  btn.disabled = true; btn.textContent = 'Saving…';
+  var payload = JSON.stringify({
+    name: name,
+    dateStart: toEspoUTC(new Date(startVal)),
+    dateEnd: endVal ? toEspoUTC(new Date(endVal)) : toEspoUTC(new Date(startVal)),
+    description: document.getElementById('calDesc').value || '',
+    status: 'Planned'
+  });
+  var method = calEditId ? 'PUT' : 'POST';
+  var path = calEditId ? 'Meeting/' + calEditId : 'Meeting';
+  espoReq(path, { method: method, headers: { 'Content-Type': 'application/json' }, body: payload })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Save failed (' + r.status + ')');
+      return r.json();
+    })
+    .then(function() {
+      btn.disabled = false; btn.textContent = 'Save Appointment';
+      calModalClose();
+      if (calInstance) calInstance.refetchEvents();
+    })
+    .catch(function(err) {
+      btn.disabled = false; btn.textContent = 'Save Appointment';
+      alert(err.message || 'Could not save.');
+    });
+}
+
+function calDelete() {
+  if (!calEditId || !confirm('Delete this appointment from EspoCRM?')) return;
+  espoReq('Meeting/' + calEditId, { method: 'DELETE' })
+    .then(function(r) {
+      if (!r.ok) throw new Error('Delete failed (' + r.status + ')');
+      calModalClose();
+      if (calInstance) calInstance.refetchEvents();
+    })
+    .catch(function(err) { alert(err.message || 'Could not delete.'); });
 }
 
 showTab('leads');
