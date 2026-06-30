@@ -15,6 +15,8 @@
     { id: 'remine-leads', label: 'Remine' }
   ];
   var currentSource = SOURCES[0].id;
+  var AGENT_NAME = 'Tom Mackrola';
+  var COMPANY_NAME = 'Delta Realty Corp';
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -285,14 +287,42 @@ var currentId = null;
 var saving = false;
 var tmplPhone = '';
 
-// Canned SMS templates. {first_name} resolves from the lead owner_name (first
-// word) and {address} from address_street at selection time. Tokens stay
-// literal if the lead has no value, so the message is always sendable.
-var TEXT_TEMPLATES = [
-  { name: 'Pre-Foreclosure Intro', body: "Hi {first_name}, my name is [agent]. I specialize in helping homeowners in pre-foreclosure on {address}. If you want options before the sale date, call or text me back." },
-  { name: 'No Answer Follow-Up', body: "Hi {first_name}, I called about {address} but missed you. I work with homeowners facing foreclosure. Happy to talk through your options, no pressure." },
-  { name: 'Notice of Sale', body: "Hi {first_name}, I saw a notice of sale filed for {address}. There may still be time to avoid the auction. Call me if you want to know your options." },
-  { name: 'Short Sale', body: "Hi {first_name}, I help homeowners sell before foreclosure and avoid the judgment. If {address} is still available I would like to talk." }
+// Approved canned SMS templates grouped by situation. resolveTemplate fills
+// {agent_name}, {company_name}, {first_name} (owner_name first word), and
+// {address} (address_street) at selection time.
+var TEMPLATES = [
+  {
+    category: 'Notice of Sale',
+    messages: [
+      'Hi, this is {agent_name} with {company_name}. If you received a Notice of Sale, it helps to first confirm the sale date and case details before deciding next steps.',
+      'A notice of sale does not always mean every option is gone. Confirm the date and case details before making decisions.',
+      'Do you know the scheduled sale date for the property? That date is the first thing to verify.'
+    ]
+  },
+  {
+    category: 'Lis Pendens',
+    messages: [
+      'Hi, this is {agent_name} with {company_name}. Lis pendens usually means a pending court case may affect the property. Do you have the case number?',
+      'If lis pendens appears on title, the next step is to identify the lawsuit behind it.',
+      'Can you share the property address and any court or recording information listed on the lis pendens notice?'
+    ]
+  },
+  {
+    category: 'Probate',
+    messages: [
+      'Hi, this is {agent_name} with {company_name}. If the property is part of an estate, we can help you identify which documents are needed to understand next steps.',
+      'For probate property, the key question is who has authority to act for the estate.',
+      'Do you have letters of office, a will, or any probate court paperwork for the property?'
+    ]
+  },
+  {
+    category: 'Short Sale',
+    messages: [
+      'Hi, this is {agent_name} with {company_name}. A short sale may be possible when the mortgage balance is higher than the sale price, but lender approval is required.',
+      'Do you know the current loan balance and estimated property value? Those are key short sale details.',
+      'If there is a foreclosure case, the court timeline matters for any short sale plan.'
+    ]
+  }
 ];
 
 var DOT = { new:'dot-new', called:'dot-called', callback:'dot-callback', appointment:'dot-appointment', notinterested:'dot-notinterested', dnc:'dot-dnc', listed:'dot-listed' };
@@ -666,9 +696,12 @@ function openTextMenu(ev, anchor, num) {
   if (!phone) return;
   tmplPhone = phone;
 
-  var html = '<div class="tmpl-head">Send template</div>';
-  for (var i = 0; i < TEXT_TEMPLATES.length; i++) {
-    html += '<div class="tmpl-item" onclick="pickTemplate(' + i + ')">' + TEXT_TEMPLATES[i].name + '</div>';
+  var html = '';
+  for (var c = 0; c < TEMPLATES.length; c++) {
+    html += '<div class="tmpl-head">' + TEMPLATES[c].category + '</div>';
+    for (var m = 0; m < TEMPLATES[c].messages.length; m++) {
+      html += '<div class="tmpl-item" onclick="pickTemplate(' + c + ',' + m + ')">' + TEMPLATES[c].category + ' ' + (m + 1) + '</div>';
+    }
   }
   var menu = document.getElementById('tmplMenu');
   menu.innerHTML = html;
@@ -696,18 +729,20 @@ function bestTextNumber(l) {
   return String(l.bestPhone || l.phone1 || '').replace(/\D/g, '');
 }
 
-// Replaces {first_name} (owner_name first word) and {address} (address_street).
-// Leaves a token literal when the lead has no value for it.
+// Resolves {agent_name} from AGENT_NAME, {company_name} from COMPANY_NAME,
+// {first_name} from owner_name (first word), and {address} from address_street.
 function resolveTemplate(body, l) {
+  body = body.split('{agent_name}').join(AGENT_NAME);
+  body = body.split('{company_name}').join(COMPANY_NAME);
   var firstName = (l && l.name) ? l.name.split(' ')[0] : '';
   if (firstName) body = body.split('{first_name}').join(firstName);
   if (l && l.address) body = body.split('{address}').join(l.address);
   return body;
 }
 
-function pickTemplate(idx) {
+function pickTemplate(c, m) {
   var l = getLead(currentId);
-  var body = resolveTemplate(TEXT_TEMPLATES[idx].body, l);
+  var body = resolveTemplate(TEMPLATES[c].messages[m], l);
   closeTextMenu();
   window.location.href = 'sms:' + tmplPhone + '&body=' + encodeURIComponent(body);
   if (l) {
