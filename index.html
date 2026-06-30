@@ -190,9 +190,56 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .dl-badge { display: inline-block; font-size: 13px; font-weight: 800; padding: 8px 16px; border-radius: 24px; margin-top: 12px; }
 .dl-badge.green { background: #0E2A14; color: #34C759; border: 1px solid #34C759; }
 .dl-badge.blue { background: #0F1A35; color: #2D6BFF; border: 1px solid #2D6BFF; }
-.dl-forms-wrap { display: flex; align-items: center; justify-content: center; min-height: 60vh; }
-.dl-open-forms { background: #2D6BFF; color: #fff; border: none; border-radius: 14px; padding: 16px 32px; font-size: 16px; font-weight: 800; cursor: pointer; font-family: inherit; }
-.dl-open-forms:active { background: #2459d6; }
+/* ── Forms tab: card menu ── */
+.frm-grid { display: grid; gap: 12px; padding: 0 0 80px; }
+.frm-card { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 14px; padding: 18px 16px; cursor: pointer; transition: border-color 0.15s, background 0.15s; -webkit-tap-highlight-color: transparent; }
+.frm-card:active { background: #222226; border-color: #2D6BFF; }
+.frm-card-name { font-size: 16px; font-weight: 800; color: #F1F1F3; margin-bottom: 4px; }
+.frm-card-sub { font-size: 11px; color: #8A8A8E; margin-bottom: 12px; }
+.frm-card-pill { display: inline-block; background: #2D6BFF; color: #fff; font-size: 12px; font-weight: 700; padding: 6px 14px; border-radius: 20px; }
+.frm-card-soon { opacity: 0.5; cursor: default; pointer-events: none; }
+.frm-pill-soon { background: #2A2A2E; color: #8A8A8E; }
+/* ── Forms tab: ERS panel ── */
+.frm-panel-hdr { display: flex; align-items: center; gap: 12px; padding: 14px 16px; border-bottom: 1px solid #2A2A2E; background: #0A0A0B; position: sticky; top: 0; z-index: 10; }
+.frm-back-btn { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 10px; padding: 8px 14px; color: #F1F1F3; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; white-space: nowrap; flex-shrink: 0; }
+.frm-back-btn:active { background: #2A2A2E; }
+.frm-panel-title { font-size: 17px; font-weight: 900; color: #F1F1F3; letter-spacing: -0.3px; }
+.frm-panel-sub { font-size: 11px; color: #8A8A8E; margin-top: 2px; }
+.frm-panel-body { padding: 14px 16px 80px; display: flex; flex-direction: column; gap: 10px; }
+.frm-progress { height: 3px; background: #2A2A2E; border-radius: 2px; }
+.frm-progress-bar { height: 100%; background: #2D6BFF; border-radius: 2px; width: 0%; transition: width 0.3s; }
+.frm-gen-btn { background: #2D6BFF; color: #fff; border: none; border-radius: 12px; padding: 15px 20px; font-size: 14px; font-weight: 800; cursor: pointer; font-family: inherit; width: 100%; text-align: center; }
+.frm-gen-btn:active { background: #2459d6; }
+.frm-gen-btn:disabled { background: #1A1A2A; color: #555; }
+.frm-clear-btn { background: transparent; border: 1px solid #2A2A2E; border-radius: 12px; padding: 12px 20px; font-size: 13px; font-weight: 700; color: #8A8A8E; cursor: pointer; font-family: inherit; width: 100%; }
+.frm-clear-btn:active { background: #1A1A1C; }
+/* ── Forms: section + field styles ── */
+.frm-section { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 12px; overflow: hidden; }
+.frm-section-hdr { padding: 8px 14px; font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: #fff; background: #2D6BFF; }
+.frm-section-body { padding: 14px; display: flex; flex-direction: column; gap: 10px; }
+.frm-row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.frm-row3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+.frm-row4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; }
+@media(max-width:520px){.frm-row2,.frm-row3,.frm-row4{grid-template-columns:1fr}}
+.frm-field { display: flex; flex-direction: column; gap: 4px; }
+.frm-lbl { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #8A8A8E; }
+.frm-inp { background: #141416; border: 1.5px solid #2A2A2E; border-radius: 8px; padding: 9px 11px; color: #F1F1F3; font-size: 14px; font-family: inherit; width: 100%; -webkit-appearance: none; }
+.frm-inp:focus { outline: none; border-color: #2D6BFF; box-shadow: 0 0 0 3px rgba(45,107,255,0.15); }
+.frm-inp::placeholder { color: #3A3A3E; }
+.frm-inp[type=date]::-webkit-calendar-picker-indicator { filter: invert(0.6); }
+.frm-check-row { display: flex; align-items: center; gap: 8px; padding: 2px 0; }
+.frm-check-group { display: flex; flex-wrap: wrap; gap: 8px 16px; padding: 2px 0; }
+.frm-check-item { display: flex; align-items: center; gap: 6px; }
+.frm-check-item label { font-size: 12px; color: #F1F1F3; cursor: pointer; }
+.frm-check-lbl { font-size: 13px; color: #F1F1F3; cursor: pointer; }
+.frm-check { width: 15px; height: 15px; accent-color: #2D6BFF; flex-shrink: 0; }
+.frm-radio-group { display: flex; gap: 20px; padding: 4px 0; }
+.frm-radio-item { display: flex; align-items: center; gap: 6px; }
+.frm-radio-item label { font-size: 13px; color: #F1F1F3; cursor: pointer; }
+.frm-radio { width: 14px; height: 14px; accent-color: #2D6BFF; }
+.frm-note { font-size: 12px; color: #8A8A8E; line-height: 1.4; }
+.frm-subhdr { font-size: 9px; font-weight: 700; letter-spacing: 0.14em; text-transform: uppercase; color: #8A8A8E; padding: 2px 0; }
+.frm-defaults-note { font-size: 11px; color: #8A8A8E; padding: 7px 10px; background: #141416; border-left: 3px solid #2D6BFF; border-radius: 0 6px 6px 0; }
 
 /* Roleplay coach: dark chat surface. AI left cards #1A1A1C, agent right #2D6BFF. */
 #roleplayScreen { display: none; flex-direction: column; height: calc(100vh - 62px); min-height: 0; background: #0A0A0B; padding: 0; }
@@ -293,17 +340,264 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div class="dl-body" id="goalsBody"></div>
 </div>
 
-<!-- Forms screen: single fallback button that opens the external forms site -->
+<!-- Forms screen: 4-card menu + in-app form panels -->
 <div class="dl-screen" id="formsScreen">
-  <div class="dl-screen-header">
-    <div class="dl-screen-title">Forms</div>
-    <div class="dl-screen-sub">DLTA forms, opened in your browser</div>
-  </div>
-  <div class="dl-body">
-    <div class="dl-forms-wrap">
-      <button class="dl-open-forms" onclick="openForms()">Open Forms</button>
+
+  <!-- Card menu -->
+  <div id="formsMenu">
+    <div class="dl-screen-header">
+      <div class="dl-screen-title">Forms</div>
+      <div class="dl-screen-sub">DLTA transaction forms</div>
+    </div>
+    <div class="dl-body">
+      <div class="frm-grid">
+        <div class="frm-card" onclick="showForm('ers')">
+          <div class="frm-card-name">Listing Agreement</div>
+          <div class="frm-card-sub">CAR · Exclusive Right to Sell · ERS 04.2026</div>
+          <div class="frm-card-pill">Fill Form →</div>
+        </div>
+        <div class="frm-card frm-card-soon">
+          <div class="frm-card-name">Buyer Rep Agreement</div>
+          <div class="frm-card-sub">CAR · Non-Exclusive Buyer · NEBBA 01.2026</div>
+          <div class="frm-card-pill frm-pill-soon">Coming Soon</div>
+        </div>
+        <div class="frm-card frm-card-soon">
+          <div class="frm-card-name">Purchase Offer</div>
+          <div class="frm-card-sub">MB8 Real Estate Contract · 02.2025</div>
+          <div class="frm-card-pill frm-pill-soon">Coming Soon</div>
+        </div>
+        <div class="frm-card frm-card-soon">
+          <div class="frm-card-name">Loan Authorization</div>
+          <div class="frm-card-sub">Mortgage payoff authorization letter</div>
+          <div class="frm-card-pill frm-pill-soon">Coming Soon</div>
+        </div>
+      </div>
     </div>
   </div>
+
+  <!-- ERS Panel -->
+  <div id="ersPanel" style="display:none">
+    <div class="frm-panel-hdr">
+      <button class="frm-back-btn" onclick="showFormsMenu()">← Back</button>
+      <div>
+        <div class="frm-panel-title">Listing Agreement</div>
+        <div class="frm-panel-sub">CAR Exclusive Right to Sell · ERS 04.2026</div>
+      </div>
+    </div>
+    <div class="frm-panel-body">
+      <div class="frm-progress"><div class="frm-progress-bar" id="ersPbar"></div></div>
+      <button class="frm-gen-btn" id="ersGenBtn" onclick="ersGeneratePDF()">⬇  Generate &amp; Download PDF</button>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">1 · Parties</div>
+        <div class="frm-section-body">
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Brokerage Name</label><input class="frm-inp" id="ers_brokerage" value="Delta Realty Corp."></div>
+            <div class="frm-field"><label class="frm-lbl">Seller Name(s)</label><input class="frm-inp" id="ers_seller" placeholder="John Doe &amp; Jane Doe"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">2 · Term</div>
+        <div class="frm-section-body">
+          <div class="frm-row4">
+            <div class="frm-field"><label class="frm-lbl">Effective Date</label><input class="frm-inp" id="ers_eff_date" type="date"></div>
+            <div class="frm-field"><label class="frm-lbl">Eff. Year</label><input class="frm-inp" id="ers_eff_year" placeholder="2026" maxlength="4"></div>
+            <div class="frm-field"><label class="frm-lbl">Termination Date</label><input class="frm-inp" id="ers_term_date" type="date"></div>
+            <div class="frm-field"><label class="frm-lbl">Term. Year</label><input class="frm-inp" id="ers_term_year" placeholder="2026" maxlength="4"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">3 · Price</div>
+        <div class="frm-section-body">
+          <div class="frm-row3">
+            <div class="frm-field"><label class="frm-lbl">Marketing Price $</label><input class="frm-inp" id="ers_price1" placeholder="350000"></div>
+            <div class="frm-field"><label class="frm-lbl">Price Change Date</label><input class="frm-inp" id="ers_price2" placeholder="December 31"></div>
+            <div class="frm-field"><label class="frm-lbl">Price Change Year</label><input class="frm-inp" id="ers_price3" placeholder="2026" maxlength="4"></div>
+          </div>
+          <div class="frm-field"><label class="frm-lbl">Reduced Price $ (if not accepted by above date)</label><input class="frm-inp" id="ers_price4" placeholder="335000"></div>
+          <div class="frm-check-row"><input type="checkbox" id="ers_price_check" class="frm-check"><label for="ers_price_check" class="frm-check-lbl">Also market for lease — fill rental price fields</label></div>
+          <div class="frm-row3" id="ers_rental_fields" style="display:none">
+            <div class="frm-field"><label class="frm-lbl">Rental Price $/mo</label><input class="frm-inp" id="ers_price5" placeholder="2500"></div>
+            <div class="frm-field"><label class="frm-lbl">Rental Change Date</label><input class="frm-inp" id="ers_price6" placeholder="December 31"></div>
+            <div class="frm-field"><label class="frm-lbl">Rental Change $/mo</label><input class="frm-inp" id="ers_price7" placeholder="2400"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">4 · Property</div>
+        <div class="frm-section-body">
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Street Address</label><input class="frm-inp" id="ers_address" placeholder="930 E 166th Pl"></div>
+            <div class="frm-field"><label class="frm-lbl">Unit Number</label><input class="frm-inp" id="ers_unit" placeholder="—"></div>
+          </div>
+          <div class="frm-row3">
+            <div class="frm-field"><label class="frm-lbl">City</label><input class="frm-inp" id="ers_city" placeholder="South Holland"></div>
+            <div class="frm-field"><label class="frm-lbl">State</label><input class="frm-inp" id="ers_state" placeholder="IL" maxlength="2"></div>
+            <div class="frm-field"><label class="frm-lbl">Zip Code</label><input class="frm-inp" id="ers_zip" placeholder="60473" maxlength="10"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Parking Space #</label><input class="frm-inp" id="ers_parking_num" placeholder="—"></div>
+            <div class="frm-field"><label class="frm-lbl">Storage Space #</label><input class="frm-inp" id="ers_storage_num" placeholder="—"></div>
+          </div>
+          <div class="frm-subhdr">Parking Type</div>
+          <div class="frm-check-group">
+            <div class="frm-check-item"><input type="checkbox" id="ers_pk1" class="frm-check"><label for="ers_pk1">Deeded</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_pk2" class="frm-check"><label for="ers_pk2">Limited Common Element</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_pk3" class="frm-check"><label for="ers_pk3">Assigned</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_pk4" class="frm-check"><label for="ers_pk4">Indoor</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_pk5" class="frm-check"><label for="ers_pk5">Outdoor</label></div>
+          </div>
+          <div class="frm-subhdr">Storage Type</div>
+          <div class="frm-check-group">
+            <div class="frm-check-item"><input type="checkbox" id="ers_st1" class="frm-check"><label for="ers_st1">Deeded</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_st2" class="frm-check"><label for="ers_st2">Limited Common Element</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_st3" class="frm-check"><label for="ers_st3">Assigned</label></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">6 · Designated Agent</div>
+        <div class="frm-section-body">
+          <div class="frm-field"><label class="frm-lbl">Designated Agent Name</label><input class="frm-inp" id="ers_agent" placeholder="Tom Mackrola"></div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">8C · Lock Box</div>
+        <div class="frm-section-body">
+          <div class="frm-note">Seller authorizes Brokerage to place a lock box on the Property:</div>
+          <div class="frm-radio-group">
+            <div class="frm-radio-item"><input type="radio" name="ers_lockbox" id="ers_lb_yes" value="yes" class="frm-radio"><label for="ers_lb_yes">Does authorize</label></div>
+            <div class="frm-radio-item"><input type="radio" name="ers_lockbox" id="ers_lb_no" value="no" class="frm-radio"><label for="ers_lb_no">Does not authorize</label></div>
+          </div>
+          <div class="frm-field"><label class="frm-lbl">Additional Unlicensed Individuals Authorized</label><input class="frm-inp" id="ers_lockbox_text" placeholder="e.g. photographer"></div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">11 · Listing Brokerage Compensation</div>
+        <div class="frm-section-body">
+          <div class="frm-check-row"><input type="checkbox" id="ers_listing_fee_chk" class="frm-check"><label for="ers_listing_fee_chk" class="frm-check-lbl">Upfront Listing Fee applies</label></div>
+          <div class="frm-field"><label class="frm-lbl">Listing Fee $ (if applicable)</label><input class="frm-inp" id="ers_listing_fee" placeholder="0.00"></div>
+          <div class="frm-check-row"><input type="checkbox" id="ers_pct_chk" class="frm-check"><label for="ers_pct_chk" class="frm-check-lbl">A. Percentage Commission</label></div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Commission %</label><input class="frm-inp" id="ers_pct_comm" placeholder="2.5"></div>
+            <div class="frm-field"><label class="frm-lbl">Plus $ Amount</label><input class="frm-inp" id="ers_pct_plus" placeholder="0.00"></div>
+          </div>
+          <div class="frm-check-row"><input type="checkbox" id="ers_flat_chk" class="frm-check"><label for="ers_flat_chk" class="frm-check-lbl">B. Flat Rate</label></div>
+          <div class="frm-field"><label class="frm-lbl">Flat Rate $</label><input class="frm-inp" id="ers_flat_rate" placeholder="0.00"></div>
+          <div class="frm-check-row"><input type="checkbox" id="ers_unrp_chk" class="frm-check"><label for="ers_unrp_chk" class="frm-check-lbl">C. Unrepresented Buyer Compensation</label></div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Unrep. Buyer %</label><input class="frm-inp" id="ers_buyer_comp1" placeholder="1.0"></div>
+            <div class="frm-field"><label class="frm-lbl">Plus $ Amount</label><input class="frm-inp" id="ers_buyer_comp2" placeholder="0.00"></div>
+          </div>
+          <div class="frm-field"><label class="frm-lbl">Early Termination Fee $</label><input class="frm-inp" id="ers_term_fee" placeholder="500.00"></div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">14 · Dual Agency Consent</div>
+        <div class="frm-section-body">
+          <div class="frm-note">Seller consents to designated agent acting as dual agent:</div>
+          <div class="frm-radio-group">
+            <div class="frm-radio-item"><input type="radio" name="ers_dual" id="ers_dual_yes" value="yes" class="frm-radio"><label for="ers_dual_yes">Yes — Prior Consent</label></div>
+            <div class="frm-radio-item"><input type="radio" name="ers_dual" id="ers_dual_no" value="no" class="frm-radio"><label for="ers_dual_no">No — Do not consent</label></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">15 · Property Information</div>
+        <div class="frm-section-body">
+          <div class="frm-row3">
+            <div class="frm-field"><label class="frm-lbl">Property PIN</label><input class="frm-inp" id="ers_pin1" placeholder="29-01-123-456-0000"></div>
+            <div class="frm-field"><label class="frm-lbl">Tax Year</label><input class="frm-inp" id="ers_tax_year" placeholder="2024" maxlength="4"></div>
+            <div class="frm-field"><label class="frm-lbl">RE Tax Amount $</label><input class="frm-inp" id="ers_tax_amt" placeholder="6500.00"></div>
+          </div>
+          <div class="frm-check-group">
+            <div class="frm-check-item"><input type="checkbox" id="ers_tt8" class="frm-check"><label for="ers_tt8">Homeowner's Exemption</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_tt9" class="frm-check"><label for="ers_tt9">Senior Citizen's Exemption</label></div>
+            <div class="frm-check-item"><input type="checkbox" id="ers_tt10" class="frm-check"><label for="ers_tt10">Senior Freeze Exemption</label></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Approx Square Feet</label><input class="frm-inp" id="ers_sqft" placeholder="1400"></div>
+            <div class="frm-field"><label class="frm-lbl">Circumstances Affecting Title</label><input class="frm-inp" id="ers_title_issues" placeholder="None"></div>
+          </div>
+          <div class="frm-check-row"><input type="checkbox" id="ers_leased_chk" class="frm-check"><label for="ers_leased_chk" class="frm-check-lbl">Property is currently leased</label></div>
+          <div class="frm-row3" id="ers_lease_fields" style="display:none">
+            <div class="frm-field"><label class="frm-lbl">Lease Expiration</label><input class="frm-inp" id="ers_lease_exp" type="date"></div>
+            <div class="frm-field"><label class="frm-lbl">Rent $/mo</label><input class="frm-inp" id="ers_rent_amt" placeholder="1800"></div>
+            <div class="frm-field"><label class="frm-lbl">Security Deposit $</label><input class="frm-inp" id="ers_sec_dep" placeholder="1800"></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">15E · Condo / HOA</div>
+        <div class="frm-section-body">
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Management Contact</label><input class="frm-inp" id="ers_mgmt_contact" placeholder="ABC Management Co."></div>
+            <div class="frm-field"><label class="frm-lbl">Management Phone</label><input class="frm-inp" id="ers_mgmt_phone" placeholder="(312) 555-1234"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Management Email</label><input class="frm-inp" id="ers_mgmt_email" placeholder="manager@example.com"></div>
+            <div class="frm-field"><label class="frm-lbl">Monthly Assessment $</label><input class="frm-inp" id="ers_monthly_assess" placeholder="450.00"></div>
+          </div>
+          <div class="frm-field"><label class="frm-lbl">Assessment Includes</label><input class="frm-inp" id="ers_assess_includes" placeholder="Heat, water, trash, common areas"></div>
+        </div>
+      </div>
+
+      <div class="frm-section">
+        <div class="frm-section-hdr">Agent &amp; Brokerage Info</div>
+        <div class="frm-section-body">
+          <div class="frm-defaults-note">Pre-filled with DLTA defaults — edit as needed.</div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Designated Agent Name</label><input class="frm-inp" id="ers_agent2" value="Tom Mackrola"></div>
+            <div class="frm-field"><label class="frm-lbl">Agent MLS ID</label><input class="frm-inp" id="ers_agent_mls" placeholder="12345"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Agent Phone 1</label><input class="frm-inp" id="ers_agent_ph1" placeholder="(708) 555-1234"></div>
+            <div class="frm-field"><label class="frm-lbl">Agent Email</label><input class="frm-inp" id="ers_agent_email" value="tom@deltarealtychi.com"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Managing Broker Name</label><input class="frm-inp" id="ers_mgr_broker" value="George Filippidis"></div>
+            <div class="frm-field"><label class="frm-lbl">Brokerage Office Phone</label><input class="frm-inp" id="ers_brok_phone" value="(708) 425-1000"></div>
+          </div>
+          <div class="frm-row3">
+            <div class="frm-field"><label class="frm-lbl">Brokerage Address</label><input class="frm-inp" id="ers_brok_addr" value="4949 W 95th St"></div>
+            <div class="frm-field"><label class="frm-lbl">City</label><input class="frm-inp" id="ers_brok_city" value="Oak Lawn"></div>
+            <div class="frm-field"><label class="frm-lbl">State / Zip</label><input class="frm-inp" id="ers_brok_state_zip" value="IL 60453"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Seller 1 Name (print)</label><input class="frm-inp" id="ers_sel1_print" placeholder="John Doe"></div>
+            <div class="frm-field"><label class="frm-lbl">Seller 2 Name (print)</label><input class="frm-inp" id="ers_sel2_print" placeholder="Jane Doe"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Seller Address</label><input class="frm-inp" id="ers_sel_addr" placeholder="930 E 166th Pl"></div>
+            <div class="frm-field"><label class="frm-lbl">Seller City / State / Zip</label><input class="frm-inp" id="ers_sel_csz" placeholder="South Holland IL 60473"></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Seller Email 1</label><input class="frm-inp" id="ers_sel_email1" placeholder="seller@email.com"></div>
+            <div class="frm-field"><label class="frm-lbl">Seller Email 2</label><input class="frm-inp" id="ers_sel_email2" placeholder=""></div>
+          </div>
+          <div class="frm-row2">
+            <div class="frm-field"><label class="frm-lbl">Signing Date (Seller)</label><input class="frm-inp" id="ers_date_seller" type="date"></div>
+            <div class="frm-field"><label class="frm-lbl">Signing Date (Brokerage)</label><input class="frm-inp" id="ers_date_brok" type="date"></div>
+          </div>
+        </div>
+      </div>
+
+      <button class="frm-gen-btn" onclick="ersGeneratePDF()">⬇  Generate &amp; Download PDF</button>
+      <button class="frm-clear-btn" onclick="ersClearAll()">Clear Form</button>
+    </div>
+  </div>
+
 </div>
 
 <!-- Roleplay screen: AI objection-handling coach. Calls the Anthropic API
@@ -328,7 +622,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <button class="dl-nav-btn active" id="navLeads" onclick="showTab('leads')"><span class="dl-nav-ico">📋</span>Leads</button>
   <button class="dl-nav-btn" id="navActivity" onclick="showTab('activity')"><span class="dl-nav-ico">📊</span>Activity</button>
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
-  <button class="dl-nav-btn" id="navForms" onclick="openForms()"><span class="dl-nav-ico">📄</span>Forms</button>
+  <button class="dl-nav-btn" id="navForms" onclick="showTab('forms')"><span class="dl-nav-ico">📄</span>Forms</button>
   <button class="dl-nav-btn" id="navRoleplay" onclick="showTab('roleplay')"><span class="dl-nav-ico">🎙️</span>Roleplay</button>
 </div>
 
@@ -1130,6 +1424,7 @@ function showTab(name) {
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
   _setNav('navGoals', name === 'goals');
+  _setNav('navForms', name === 'forms');
   _setNav('navRoleplay', name === 'roleplay');
   if (name === 'activity') renderActivity();
   if (name === 'goals') renderGoals();
@@ -1495,6 +1790,450 @@ function rpCallApi() {
 }
 
 showTab('leads');
+
+// ── Forms tab ──
+function showForm(name) {
+  document.getElementById('formsMenu').style.display = 'none';
+  if (name === 'ers') {
+    document.getElementById('ersPanel').style.display = 'block';
+    ersInitPanel();
+  }
+}
+
+function showFormsMenu() {
+  document.getElementById('ersPanel').style.display = 'none';
+  document.getElementById('formsMenu').style.display = 'block';
+}
+
+var _ersPanelInited = false;
+function ersInitPanel() {
+  if (_ersPanelInited) return;
+  _ersPanelInited = true;
+  var today = new Date().toISOString().slice(0, 10);
+  document.getElementById('ers_date_seller').value = today;
+  document.getElementById('ers_date_brok').value = today;
+  document.getElementById('ers_price_check').addEventListener('change', function() {
+    document.getElementById('ers_rental_fields').style.display = this.checked ? 'grid' : 'none';
+  });
+  document.getElementById('ers_leased_chk').addEventListener('change', function() {
+    document.getElementById('ers_lease_fields').style.display = this.checked ? 'grid' : 'none';
+  });
+  document.querySelectorAll('#ersPanel input').forEach(function(i) {
+    i.addEventListener('input', ersUpdateProgress);
+    i.addEventListener('change', ersUpdateProgress);
+  });
+  ersUpdateProgress();
+}
+
+function ersUpdateProgress() {
+  var inputs = document.querySelectorAll('#ersPanel input:not([type=checkbox]):not([type=radio])');
+  var filled = Array.from(inputs).filter(function(i) { return i.value.trim(); }).length;
+  var bar = document.getElementById('ersPbar');
+  if (bar) bar.style.width = Math.round(filled / inputs.length * 100) + '%';
+}
+
+function ersV(id) { var e = document.getElementById(id); return e ? (e.value || '').trim() : ''; }
+
+function ersFmtDate(d) {
+  if (!d) return '';
+  var p = d.split('-');
+  var mo = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+  return mo[parseInt(p[1]) - 1] + ' ' + parseInt(p[2]) + ', ' + p[0];
+}
+
+async function ersGeneratePDF() {
+  var btn = document.getElementById('ersGenBtn');
+  if (btn) { btn.textContent = 'Generating...'; btn.disabled = true; }
+  try {
+    var fv = {};
+    var v = ersV;
+    var mo = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+
+    if (v('ers_brokerage')) fv['DesignatedAgent'] = v('ers_agent') || v('ers_agent2');
+
+    var effRaw = v('ers_eff_date');
+    if (effRaw) { var ep=effRaw.split('-'); fv['EffectiveDate1']=mo[parseInt(ep[1])-1]+' '+parseInt(ep[2]); fv['EffectiveDate2']=ep[0]; }
+    var termRaw = v('ers_term_date');
+    if (termRaw) { var tp=termRaw.split('-'); fv['TerminationDate1']=mo[parseInt(tp[1])-1]+' '+parseInt(tp[2]); fv['TerminationDate2']=tp[0]; }
+
+    if (v('ers_price1')) fv['Price1']=v('ers_price1');
+    if (v('ers_price2')) fv['Price2']=v('ers_price2');
+    if (v('ers_price3')) fv['Price3']=v('ers_price3');
+    if (v('ers_price4')) fv['Price4']=v('ers_price4');
+    if (document.getElementById('ers_price_check').checked) {
+      fv['PriceCheck']='Yes';
+      if (v('ers_price5')) fv['Price5']=v('ers_price5');
+      if (v('ers_price7')) fv['Price7']=v('ers_price7');
+    }
+
+    if (v('ers_address')) fv['AddressLong']=v('ers_address');
+    if (v('ers_unit')) fv['UnitNumber']=v('ers_unit');
+    if (v('ers_city')) fv['City']=v('ers_city');
+    if (v('ers_state')) fv['State']=v('ers_state');
+    if (v('ers_zip')) fv['PostalCode']=v('ers_zip');
+    if (v('ers_parking_num')) fv['ParkingSpaceNumber']=v('ers_parking_num');
+    if (v('ers_storage_num')) fv['StorageSpaceNumber']=v('ers_storage_num');
+
+    var pkMap={ers_pk1:'ParkingSpaceCheck1',ers_pk2:'ParkingSpaceCheck2',ers_pk3:'ParkingSpaceCheck3',ers_pk4:'ParkingSpaceCheck4',ers_pk5:'ParkingSpaceCheck5'};
+    Object.keys(pkMap).forEach(function(id){if(document.getElementById(id).checked)fv[pkMap[id]]='Yes';});
+    var stMap={ers_st1:'StorageSpaceCheck1',ers_st2:'StorageSpaceCheck2',ers_st3:'StorageSpaceCheck3'};
+    Object.keys(stMap).forEach(function(id){if(document.getElementById(id).checked)fv[stMap[id]]='Yes';});
+
+    if (document.getElementById('ers_lb_yes').checked) fv['LockBoxCheck1']='Yes';
+    if (document.getElementById('ers_lb_no').checked) fv['LockBoxCheck2']='Yes';
+    if (v('ers_lockbox_text')) fv['LockBox']=v('ers_lockbox_text');
+
+    if (document.getElementById('ers_listing_fee_chk').checked) fv['ListingFeeCheck1']='Yes';
+    if (v('ers_listing_fee')) fv['ListingFee']=v('ers_listing_fee');
+    if (document.getElementById('ers_pct_chk').checked) fv['BrokerageCompensationCheck1']='Yes';
+    if (v('ers_pct_comm')) fv['PercentCommission']=v('ers_pct_comm');
+    if (v('ers_pct_plus')) fv['Compensation2']=v('ers_pct_plus');
+    if (document.getElementById('ers_flat_chk').checked) fv['CompensationCheck2']='Yes';
+    if (document.getElementById('ers_unrp_chk').checked) fv['CompensationCheck3']='Yes';
+    if (v('ers_buyer_comp1')) fv['BuyerComp1']=v('ers_buyer_comp1');
+    if (v('ers_buyer_comp2')) fv['BuyerComp2']=v('ers_buyer_comp2');
+    if (v('ers_term_fee')) fv['TerminationOfAgreement']=v('ers_term_fee');
+
+    if (document.getElementById('ers_dual_yes').checked) fv['DualAgencyCheck1']='Yes';
+    if (document.getElementById('ers_dual_no').checked) fv['DualAgencyCheck2']='Yes';
+
+    if (v('ers_pin1')) fv['Pin1']=v('ers_pin1');
+    if (v('ers_tax_year')) fv['TaxesYear']=v('ers_tax_year');
+    if (v('ers_tax_amt')) fv['TaxesAmount']=v('ers_tax_amt');
+    if (v('ers_sqft')) fv['ApproxSqFt']=v('ers_sqft');
+    if (v('ers_title_issues')) fv['TransferOfTitle']=v('ers_title_issues');
+    if (document.getElementById('ers_leased_chk').checked) {
+      if (v('ers_lease_exp')) fv['LeaseExpirationDate']=ersFmtDate(v('ers_lease_exp'));
+      if (v('ers_rent_amt')) fv['RentAmount']=v('ers_rent_amt');
+    }
+    if (v('ers_mgmt_contact')) fv['ManagementContact']=v('ers_mgmt_contact');
+    if (v('ers_mgmt_phone')) fv['ManagerPhone']=v('ers_mgmt_phone');
+    if (v('ers_mgmt_email')) fv['ManagerEmail']=v('ers_mgmt_email');
+    if (v('ers_monthly_assess')) fv['MonthlyAssessment']=v('ers_monthly_assess');
+    if (v('ers_assess_includes')) fv['AssessmentIncludes']=v('ers_assess_includes');
+
+    if (v('ers_mgr_broker')) fv['DesignatedManagingBrokerName']=v('ers_mgr_broker');
+    if (v('ers_agent2')) fv['BuyerAgentName']=v('ers_agent2');
+    if (v('ers_agent_mls')) fv['BuyerAgentMLSId']=v('ers_agent_mls');
+    if (v('ers_agent_ph1')) fv['BuyerAgentOnePhone']=v('ers_agent_ph1');
+    if (v('ers_agent_email')) fv['BuyerAgentEmail']=v('ers_agent_email');
+    if (v('ers_brok_phone')) fv['BuyerBrokerCompanyOfficePhone']=v('ers_brok_phone');
+    if (v('ers_brok_addr')) fv['BuyerBrokerCompanyAddress']=v('ers_brok_addr');
+    if (v('ers_brok_city')) fv['BuyerBrokerCompanyCity']=v('ers_brok_city');
+    var stzip = v('ers_brok_state_zip').split(' ');
+    if (stzip[0]) fv['BuyerBrokerCompanyState']=stzip[0];
+    if (stzip[1]) fv['BuyerBrokerCompanyPostalCode']=stzip[1];
+    if (v('ers_sel1_print')) fv['SellerTwoName']=v('ers_sel1_print');
+    if (v('ers_sel2_print')) fv['SellerLegalAgent1']=v('ers_sel2_print');
+    if (v('ers_sel_addr')) fv['SellerAddress']=v('ers_sel_addr');
+    if (v('ers_sel_csz')) fv['SellerCity']=v('ers_sel_csz').replace(/\s+[A-Z]{2}\s+\d+.*$/,'').trim();
+    if (v('ers_sel_email1')) fv['SellerOneEmail']=v('ers_sel_email1');
+    if (v('ers_sel_email2')) fv['SellerTwoEmail']=v('ers_sel_email2');
+    if (v('ers_date_seller')) fv['Date2']=ersFmtDate(v('ers_date_seller'));
+    if (v('ers_date_brok')) fv['Date3']=ersFmtDate(v('ers_date_brok'));
+
+    var fname = 'ERS_' + (v('ers_address') || 'listing').replace(/[^a-zA-Z0-9]/g,'_').slice(0,30) + '.pdf';
+    await fillPDFOverlay('assets/forms/CAR_ERS_0426.pdf', fv, ERS_FIELDS, fname);
+
+  } catch(e) {
+    console.error(e);
+    alert('PDF error: ' + e.message);
+  }
+  if (btn) { btn.textContent = '⬇  Generate & Download PDF'; btn.disabled = false; }
+}
+
+function ersClearAll() {
+  var preserve = ['ers_brokerage','ers_agent2','ers_mgr_broker','ers_brok_phone','ers_brok_addr','ers_brok_city','ers_brok_state_zip','ers_agent_email'];
+  document.querySelectorAll('#ersPanel input:not([type=checkbox]):not([type=radio])').forEach(function(i) {
+    if (preserve.indexOf(i.id) === -1) i.value = '';
+  });
+  document.querySelectorAll('#ersPanel input[type=checkbox],#ersPanel input[type=radio]').forEach(function(i) { i.checked = false; });
+  document.getElementById('ers_rental_fields').style.display = 'none';
+  document.getElementById('ers_lease_fields').style.display = 'none';
+  var today = new Date().toISOString().slice(0, 10);
+  document.getElementById('ers_date_seller').value = today;
+  document.getElementById('ers_date_brok').value = today;
+  ersUpdateProgress();
+}
+
+const ERS_FIELDS = {
+  "EffectiveDate2":{"page":1,"x":402.63,"y":228.96,"w":20.8,"h":14.4,"fs":9},
+  "EffectiveDate1":{"page":1,"x":262.83,"y":229.53,"w":125.3,"h":14.4,"fs":9},
+  "TerminationDate2":{"page":1,"x":250.68,"y":242.84,"w":20.8,"h":14.4,"fs":9},
+  "TerminationDate1":{"page":1,"x":105.01,"y":243.52,"w":129.94,"h":14.4,"fs":9},
+  "Price1":{"page":1,"x":370.16,"y":375.81,"w":114.79,"h":14.4,"fs":9},
+  "Price3":{"page":1,"x":566.96,"y":389.59,"w":20.01,"h":14.4,"fs":9},
+  "Price2":{"page":1,"x":447.22,"y":389.76,"w":105.33,"h":14.4,"fs":9},
+  "Price4":{"page":1,"x":290.67,"y":403.96,"w":115.49,"h":14.4,"fs":9},
+  "Price5":{"page":1,"x":382.66,"y":436.01,"w":60.13,"h":14.4,"fs":9},
+  "Price7":{"page":1,"x":564.81,"y":450.11,"w":20.19,"h":14.4,"fs":9},
+  "Price6":{"page":1,"x":454.8,"y":450.38,"w":95.26,"h":14.4,"fs":9},
+  "Price8":{"page":1,"x":293.19,"y":464.26,"w":70.42,"h":14.4,"fs":9},
+  "UnitNumber":{"page":1,"x":477.12,"y":498.41,"w":89.78,"h":14.4,"fs":9},
+  "AddressLong":{"page":1,"x":78.5,"y":498.64,"w":328.69,"h":14.4,"fs":9},
+  "City":{"page":1,"x":60.71,"y":512.13,"w":260.06,"h":14.4,"fs":9},
+  "State":{"page":1,"x":348.65,"y":512.22,"w":59.83,"h":14.4,"fs":9},
+  "PostalCode":{"page":1,"x":450.79,"y":512.74,"w":115.01,"h":14.4,"fs":9},
+  "ParkingSpaceNumber":{"page":1,"x":150.04,"y":533.94,"w":50.5,"h":14.4,"fs":9},
+  "StorageSpaceNumber":{"page":1,"x":148.38,"y":549.66,"w":50.37,"h":14.4,"fs":9},
+  "DesignatedAgent":{"page":1,"x":329.87,"y":617.49,"w":253.67,"h":14.4,"fs":9},
+  "LockBox":{"page":2,"x":157.74,"y":477.62,"w":298.91,"h":14.4,"fs":9},
+  "ListingFee":{"page":3,"x":386.04,"y":464.3,"w":54.93,"h":14.4,"fs":9},
+  "PercentCommission":{"page":3,"x":428.71,"y":519.92,"w":45.29,"h":14.4,"fs":9},
+  "Compensation2":{"page":3,"x":321.05,"y":534.44,"w":56.15,"h":14.4,"fs":9},
+  "Compensation5":{"page":3,"x":302.09,"y":555.66,"w":120.97,"h":14.4,"fs":9},
+  "BuyerComp1":{"page":3,"x":352.54,"y":605.07,"w":45.71,"h":14.4,"fs":9},
+  "BuyerComp2":{"page":3,"x":262.12,"y":618.73,"w":54.65,"h":14.4,"fs":9},
+  "RentalCommission1":{"page":3,"x":358.3,"y":668.65,"w":205.22,"h":14.4,"fs":9},
+  "RentalCommission2":{"page":3,"x":102.06,"y":682.55,"w":60.43,"h":14.4,"fs":9},
+  "Compensation6":{"page":4,"x":125.39,"y":26.17,"w":459.07,"h":14.4,"fs":9},
+  "Compensation7":{"page":4,"x":126.44,"y":40.54,"w":354.26,"h":14.4,"fs":9},
+  "Pin1":{"page":5,"x":126.5,"y":538.13,"w":201.17,"h":14.4,"fs":9},
+  "TaxesAmount":{"page":5,"x":243.83,"y":553.29,"w":84.85,"h":14.4,"fs":9},
+  "TaxesYear":{"page":5,"x":192.84,"y":553.73,"w":19.77,"h":14.4,"fs":9},
+  "Pin2":{"page":5,"x":60.83,"y":582.55,"w":90.28,"h":14.4,"fs":9},
+  "Pin3":{"page":5,"x":182.33,"y":582.82,"w":144.59,"h":14.4,"fs":9},
+  "TaxesYear2":{"page":5,"x":192.01,"y":596.3,"w":20.12,"h":14.4,"fs":9},
+  "TaxesAmount2":{"page":5,"x":244.09,"y":597.18,"w":85.2,"h":14.4,"fs":9},
+  "TransferOfTitle":{"page":5,"x":150.07,"y":646.82,"w":434.53,"h":14.4,"fs":9},
+  "LeaseExpirationDate":{"page":5,"x":182.99,"y":682.03,"w":85.45,"h":14.4,"fs":9},
+  "Per":{"page":5,"x":418.09,"y":682.06,"w":60.49,"h":14.4,"fs":9},
+  "RentAmount":{"page":5,"x":339.83,"y":682.23,"w":65.22,"h":14.4,"fs":9},
+  "ApproxSqFt":{"page":5,"x":290.3,"y":729.62,"w":156.93,"h":14.4,"fs":9},
+  "ManagementContact":{"page":6,"x":154.11,"y":292.48,"w":418.98,"h":14.4,"fs":9},
+  "ManagerEmail":{"page":6,"x":349.82,"y":312.25,"w":224.27,"h":14.4,"fs":9},
+  "ManagerPhone":{"page":6,"x":149.07,"y":312.56,"w":114.69,"h":14.4,"fs":9},
+  "MonthlyAssessment":{"page":6,"x":213.24,"y":332.1,"w":89.73,"h":14.4,"fs":9},
+  "AssessmentIncludes":{"page":6,"x":149.14,"y":353.53,"w":424.41,"h":14.4,"fs":9},
+  "BalanceDue":{"page":6,"x":511.6,"y":429.09,"w":75.19,"h":14.4,"fs":9},
+  "SpecialAssessment":{"page":6,"x":291.36,"y":429.62,"w":79.65,"h":14.4,"fs":9},
+  "SpecialAssessment2":{"page":6,"x":319.34,"y":444.33,"w":76.19,"h":14.4,"fs":9},
+  "PayableThrough":{"page":6,"x":129.63,"y":444.48,"w":85.26,"h":14.4,"fs":9},
+  "Days1":{"page":7,"x":292.08,"y":287.7,"w":30.81,"h":11.49,"fs":8.3},
+  "Days2":{"page":7,"x":251.97,"y":303.19,"w":110.52,"h":11.49,"fs":8.3},
+  "TypeOfService":{"page":7,"x":271.23,"y":333.23,"w":314.22,"h":11.49,"fs":8.3},
+  "SmartDoorbellNum":{"page":8,"x":228.44,"y":255.79,"w":20.36,"h":14.4,"fs":9},
+  "RefrigeratorNum":{"page":8,"x":108.59,"y":256.1,"w":20.54,"h":14.4,"fs":9},
+  "CentralAirConditionerNum":{"page":8,"x":405.09,"y":256.1,"w":20.19,"h":14.4,"fs":9},
+  "WindowTreatmentsNum":{"page":8,"x":538.86,"y":256.45,"w":20.49,"h":14.4,"fs":9},
+  "TackedDownCarpetingNum":{"page":8,"x":552.11,"y":270.42,"w":20.01,"h":14.4,"fs":9},
+  "SmartLockNum":{"page":8,"x":212.28,"y":271.3,"w":20.36,"h":14.4,"fs":9},
+  "OvenRangeNum":{"page":8,"x":109.82,"y":271.69,"w":20.19,"h":14.4,"fs":9},
+  "WindowAirConditionerNum":{"page":8,"x":409.64,"y":271.87,"w":19.66,"h":14.4,"fs":9},
+  "FireplaceScreenNum":{"page":8,"x":570.51,"y":286.01,"w":15.13,"h":14.4,"fs":9},
+  "SmartThermostatNum":{"page":8,"x":385.27,"y":286.67,"w":19.66,"h":14.4,"fs":9},
+  "MicrowaveNum":{"page":8,"x":104.91,"y":286.76,"w":20.01,"h":14.4,"fs":9},
+  "IntercomSystemNum":{"page":8,"x":236.12,"y":286.93,"w":20.36,"h":14.4,"fs":9},
+  "DishwasherNum":{"page":8,"x":106.84,"y":301.82,"w":19.84,"h":14.4,"fs":9},
+  "FireplaceGasLogNum":{"page":8,"x":526.29,"y":302.08,"w":20.14,"h":14.4,"fs":9},
+  "SecuritySystemNum":{"page":8,"x":231.75,"y":302.17,"w":20.01,"h":14.4,"fs":9},
+  "ElectronicAirFilterNum":{"page":8,"x":386.12,"y":302.7,"w":20.01,"h":14.4,"fs":9},
+  "FirewoodNum":{"page":8,"x":494.02,"y":316.71,"w":20.06,"h":14.4,"fs":9},
+  "GarbageDisposalNum":{"page":8,"x":129.92,"y":317.94,"w":20.28,"h":14.4,"fs":9},
+  "CentralHumidifierNum":{"page":8,"x":386.04,"y":317.94,"w":20.54,"h":14.4,"fs":9},
+  "SatelliteDishNum":{"page":8,"x":220.14,"y":332.83,"w":20.01,"h":14.4,"fs":9},
+  "AttachedGasGrillNum":{"page":8,"x":528.46,"y":332.92,"w":20.1,"h":14.4,"fs":9},
+  "RadiatorCoversNum":{"page":8,"x":375.61,"y":333.36,"w":20.36,"h":14.4,"fs":9},
+  "TrashCompactorNum":{"page":8,"x":128.56,"y":333.53,"w":20.89,"h":14.4,"fs":9},
+  "ExistingStormsNum":{"page":8,"x":567.42,"y":348.51,"w":19.97,"h":14.4,"fs":9},
+  "AttachedTVNum":{"page":8,"x":227.41,"y":348.68,"w":20.01,"h":14.4,"fs":9},
+  "WasherNum":{"page":8,"x":90.81,"y":348.77,"w":20.01,"h":14.4,"fs":9},
+  "LightFixturesNum":{"page":8,"x":377.63,"y":348.95,"w":20.19,"h":14.4,"fs":9},
+  "TVAntennaNum":{"page":8,"x":214.97,"y":363.66,"w":20.19,"h":14.4,"fs":9},
+  "OutdoorPlaysetSwingsNum":{"page":8,"x":555.77,"y":363.75,"w":20.14,"h":14.4,"fs":9},
+  "DryerNum":{"page":8,"x":82.01,"y":365.02,"w":20.1,"h":13.79,"fs":9},
+  "CeilingFanNum":{"page":8,"x":355.38,"y":364.54,"w":20.19,"h":14.4,"fs":9},
+  "OutdoorShedNum":{"page":8,"x":512.17,"y":379.17,"w":20.14,"h":14.4,"fs":9},
+  "WaterSoftenerNum":{"page":8,"x":122.12,"y":380.17,"w":20.1,"h":13.79,"fs":9},
+  "MultimediaEquipmentNum":{"page":8,"x":261.09,"y":379.78,"w":20.01,"h":14.4,"fs":9},
+  "ElectronicGarageDoor1":{"page":8,"x":331.59,"y":394.82,"w":15.13,"h":14.4,"fs":9},
+  "AllPlantedVegetationNum":{"page":8,"x":545.74,"y":394.93,"w":20.49,"h":14.4,"fs":9},
+  "SumpPumpNum":{"page":8,"x":108.42,"y":395.37,"w":20.54,"h":14.4,"fs":9},
+  "ElectronicGarageDoorNum":{"page":8,"x":405.05,"y":395.41,"w":20.36,"h":14.4,"fs":9},
+  "StereoSpeakersSurroundSoundNum":{"page":8,"x":232.6,"y":410.57,"w":20.36,"h":14.4,"fs":9},
+  "OtherEquipment_2":{"page":8,"x":455.32,"y":424.71,"w":125.3,"h":14.4,"fs":9},
+  "BuiltInOrAttachedShelvesOrCabinetsNum":{"page":8,"x":390.24,"y":424.8,"w":20.27,"h":14.4,"fs":9},
+  "SmokeAndCarbonMonoxideNum":{"page":8,"x":142.29,"y":424.98,"w":20.06,"h":14.4,"fs":9},
+  "Transfers1":{"page":8,"x":182.63,"y":445.74,"w":405.11,"h":14.4,"fs":9},
+  "Transfers2":{"page":8,"x":43.05,"y":459.31,"w":543.15,"h":14.4,"fs":9},
+  "Excluded1":{"page":8,"x":237.32,"y":479.28,"w":350.35,"h":14.4,"fs":9},
+  "TerminationOfAgreement":{"page":9,"x":164.93,"y":164.82,"w":80.57,"h":14.4,"fs":9},
+  "AdditionalTerms1":{"page":9,"x":236.55,"y":532.68,"w":345.97,"h":11.49,"fs":8.3},
+  "AdditionalTerms2":{"page":9,"x":41.96,"y":545.82,"w":539.37,"h":11.49,"fs":8.3},
+  "AdditionalTerms3":{"page":9,"x":41.83,"y":560.01,"w":544.62,"h":11.49,"fs":8.3},
+  "DesignatedManagingBrokerName":{"page":10,"x":451.0,"y":52.08,"w":136.25,"h":14.4,"fs":9},
+  "Date3":{"page":10,"x":351.06,"y":90.64,"w":235.61,"h":14.4,"fs":9},
+  "Date2":{"page":10,"x":61.78,"y":91.17,"w":225.24,"h":14.4,"fs":9},
+  "SellerLegalAgent1":{"page":10,"x":42.56,"y":137.3,"w":247.31,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyAddress":{"page":10,"x":361.48,"y":137.74,"w":224.19,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyState":{"page":10,"x":498.12,"y":153.42,"w":28.69,"h":14.4,"fs":9},
+  "SellerLegalAgent2":{"page":10,"x":43.0,"y":153.59,"w":247.31,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyPostalCode":{"page":10,"x":540.87,"y":153.94,"w":45.59,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyCity":{"page":10,"x":348.17,"y":154.21,"w":128.19,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyOfficePhone":{"page":10,"x":376.55,"y":169.01,"w":88.6,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyFax":{"page":10,"x":480.61,"y":169.36,"w":88.33,"h":14.4,"fs":9},
+  "BuyerBrokerCompanyOfficeMLSId":{"page":10,"x":378.21,"y":185.12,"w":99.9,"h":14.4,"fs":9},
+  "SellerTwoName":{"page":10,"x":114.91,"y":200.54,"w":172.34,"h":14.4,"fs":9},
+  "BuyerAgentName":{"page":10,"x":433.68,"y":216.98,"w":151.84,"h":14.4,"fs":9},
+  "SellerAddress":{"page":10,"x":72.7,"y":216.84,"w":212.19,"h":14.57,"fs":9},
+  "SellerCity":{"page":10,"x":57.63,"y":231.99,"w":115.84,"h":14.4,"fs":9},
+  "SellerState":{"page":10,"x":192.87,"y":232.77,"w":33.24,"h":14.4,"fs":9},
+  "BuyerAgentMLSId":{"page":10,"x":415.22,"y":232.77,"w":171.55,"h":14.4,"fs":9},
+  "SellerZip":{"page":10,"x":239.56,"y":232.79,"w":48.04,"h":14.71,"fs":9},
+  "BuyerAgentOnePhone":{"page":10,"x":382.37,"y":248.19,"w":203.87,"h":14.4,"fs":9},
+  "Phone2":{"page":10,"x":125.16,"y":248.47,"w":165.24,"h":14.54,"fs":9},
+  "Phone1":{"page":10,"x":42.92,"y":248.64,"w":52.42,"h":14.4,"fs":9},
+  "BuyerAgentTwoPhone":{"page":10,"x":382.64,"y":263.96,"w":202.99,"h":14.4,"fs":9},
+  "Phone4":{"page":10,"x":124.9,"y":263.98,"w":165.06,"h":14.52,"fs":9},
+  "Phone3":{"page":10,"x":42.65,"y":264.31,"w":52.25,"h":14.4,"fs":9},
+  "BuyerAgentFax":{"page":10,"x":367.13,"y":279.46,"w":218.85,"h":14.4,"fs":9},
+  "Phone5":{"page":10,"x":43.18,"y":279.81,"w":51.9,"h":14.4,"fs":9},
+  "Phone6":{"page":10,"x":124.64,"y":280.07,"w":165.59,"h":14.4,"fs":9},
+  "BuyerAgentEmail":{"page":10,"x":373.26,"y":295.05,"w":212.01,"h":14.4,"fs":9},
+  "Phone8":{"page":10,"x":125.42,"y":295.05,"w":164.71,"h":14.4,"fs":9},
+  "Phone7":{"page":10,"x":42.91,"y":295.58,"w":51.9,"h":14.4,"fs":9},
+  "SellerOneEmail":{"page":10,"x":99.67,"y":311.35,"w":192.48,"h":14.4,"fs":9},
+  "SellerTwoEmail":{"page":10,"x":100.07,"y":327.64,"w":191.61,"h":14.4,"fs":9}
+};
+Object.assign(ERS_FIELDS, {
+  "ParkingSpaceCheck1":{"page":1,"x":276.0,"y":224.0,"w":9,"h":9,"fs":9,"check":true},
+  "ParkingSpaceCheck2":{"page":1,"x":321.0,"y":224.0,"w":9,"h":9,"fs":9,"check":true},
+  "ParkingSpaceCheck3":{"page":1,"x":423.0,"y":224.0,"w":9,"h":9,"fs":9,"check":true},
+  "ParkingSpaceCheck4":{"page":1,"x":474.0,"y":224.0,"w":9,"h":9,"fs":9,"check":true},
+  "ParkingSpaceCheck5":{"page":1,"x":525.0,"y":224.0,"w":9,"h":9,"fs":9,"check":true},
+  "StorageSpaceCheck1":{"page":1,"x":253.0,"y":239.0,"w":9,"h":9,"fs":9,"check":true},
+  "StorageSpaceCheck2":{"page":1,"x":298.0,"y":239.0,"w":9,"h":9,"fs":9,"check":true},
+  "StorageSpaceCheck3":{"page":1,"x":401.0,"y":239.0,"w":9,"h":9,"fs":9,"check":true},
+  "LockBoxCheck1":{"page":2,"x":121.0,"y":296.0,"w":9,"h":9,"fs":9,"check":true},
+  "LockBoxCheck2":{"page":2,"x":173.0,"y":296.0,"w":9,"h":9,"fs":9,"check":true},
+  "ListingFeeCheck1":{"page":3,"x":371.0,"y":546.0,"w":9,"h":9,"fs":9,"check":true},
+  "BrokerageCompensationCheck1":{"page":3,"x":42.0,"y":575.5,"w":9,"h":9,"fs":9,"check":true},
+  "CompensationCheck2":{"page":3,"x":42.0,"y":604.5,"w":9,"h":9,"fs":9,"check":true},
+  "UnrepresentedBuyerCompensationCheck":{"page":3,"x":42.0,"y":633.0,"w":9,"h":9,"fs":9,"check":true},
+  "DualAgencyCheck1":{"page":5,"x":42.0,"y":344.0,"w":9,"h":9,"fs":9,"check":true},
+  "DualAgencyCheck2":{"page":5,"x":42.0,"y":402.0,"w":9,"h":9,"fs":9,"check":true}
+});
+
+async function loadLib(src, globalCheck) {
+  if (globalCheck && globalCheck()) return;
+  var existing = Array.from(document.scripts).find(function(s){return s.src===src;});
+  if (existing) {
+    await new Promise(function(resolve, reject) {
+      if (globalCheck && globalCheck()) return resolve();
+      existing.addEventListener('load', resolve, {once:true});
+      existing.addEventListener('error', reject, {once:true});
+      setTimeout(resolve, 1500);
+    });
+    if (globalCheck && globalCheck()) return;
+  }
+  await new Promise(function(resolve, reject) {
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = function(){reject(new Error('Could not load ' + src));};
+    document.head.appendChild(s);
+  });
+}
+
+function _safePdfText(raw) {
+  return String(raw ?? '')
+    .replace(/[‘’]/g,"'")
+    .replace(/[“”]/g,'"')
+    .replace(/[–—]/g,'-')
+    .replace(/\s+/g,' ')
+    .trim();
+}
+
+function _isCheckedValue(value) {
+  return /^(yes|true|x|checked|1)$/i.test(String(value ?? '').trim());
+}
+
+function _trimToWidth(doc, text, maxWidth) {
+  text = _safePdfText(text);
+  if (!text) return '';
+  if (doc.getTextWidth(text) <= maxWidth) return text;
+  while (text.length > 1 && doc.getTextWidth(text + '...') > maxWidth) text = text.slice(0,-1);
+  return text.length > 1 ? text + '...' : '';
+}
+
+async function fillPDFOverlay(pdfFilename, fieldValues, coordMap, outputFilename) {
+  await loadLib('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js', function(){return !!window.pdfjsLib;});
+  await loadLib('https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js', function(){return !!(window.jspdf && window.jspdf.jsPDF);});
+
+  var pdfjsLib = window.pdfjsLib;
+  var jsPDF = window.jspdf.jsPDF;
+
+  pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+  var resp = await fetch(pdfFilename + '?v=' + Date.now(), {cache:'no-store'});
+  if (!resp.ok) throw new Error('Cannot load ' + pdfFilename + '. Make sure the PDF is in the assets/forms/ folder.');
+
+  var bytes = new Uint8Array(await resp.arrayBuffer());
+  var loadingTask = pdfjsLib.getDocument({data:bytes, useWorker:true, disableFontFace:false, isEvalSupported:false});
+  var srcPdf = await loadingTask.promise;
+
+  var out = null;
+
+  for (var pageNum = 1; pageNum <= srcPdf.numPages; pageNum++) {
+    var page = await srcPdf.getPage(pageNum);
+    var baseViewport = page.getViewport({scale:1});
+    var pageW = baseViewport.width;
+    var pageH = baseViewport.height;
+
+    if (!out) {
+      out = new jsPDF({unit:'pt', format:[pageW,pageH], orientation: pageW>pageH?'landscape':'portrait', compress:true});
+    } else {
+      out.addPage([pageW,pageH], pageW>pageH?'landscape':'portrait');
+    }
+
+    var renderScale = Math.min(2, Math.max(1.35, window.devicePixelRatio || 1.5));
+    var viewport = page.getViewport({scale:renderScale});
+    var canvas = document.createElement('canvas');
+    canvas.width = Math.ceil(viewport.width);
+    canvas.height = Math.ceil(viewport.height);
+    var ctx = canvas.getContext('2d', {alpha:false});
+    ctx.save(); ctx.fillStyle='#ffffff'; ctx.fillRect(0,0,canvas.width,canvas.height); ctx.restore();
+
+    await page.render({canvasContext:ctx, viewport:viewport}).promise;
+    var imgData = canvas.toDataURL('image/png');
+    out.addImage(imgData,'PNG',0,0,pageW,pageH,undefined,'FAST');
+
+    out.setFont('helvetica','normal');
+    out.setTextColor(0,0,0);
+
+    Object.keys(coordMap).forEach(function(fieldId) {
+      var value = fieldValues[fieldId];
+      if (value === undefined || value === null || String(value).trim() === '') return;
+      var coordsRaw = coordMap[fieldId];
+      var coordList = Array.isArray(coordsRaw) ? coordsRaw : [coordsRaw];
+      coordList.forEach(function(coords) {
+        if (Number(coords.page) !== pageNum) return;
+        var fs = Number(coords.fs || 9);
+        var x = Number(coords.x || 0) + 1;
+        var yTop = Number(coords.y || 0);
+        var h = Number(coords.h || fs + 2);
+        var w = Math.max(5, Number(coords.w || 80) - 2);
+        var isCheck = coords.check === true || /check/i.test(fieldId) || Number(coords.w || 0) <= 12;
+        out.setFontSize(fs);
+        if (isCheck) {
+          if (_isCheckedValue(value)) {
+            out.setFont('helvetica','bold');
+            out.setFontSize(Number(coords.markSize || 11));
+            out.text('X', x + 0.5, yTop + h - 1.5);
+            out.setFont('helvetica','normal');
+          }
+        } else {
+          var text = _trimToWidth(out, value, w);
+          if (!text) return;
+          out.text(text, x, yTop + h - 2, {maxWidth:w, baseline:'alphabetic'});
+        }
+      });
+    });
+  }
+
+  if (!out) throw new Error('The PDF had no pages.');
+  out.save(outputFilename || 'filled-form.pdf');
+}
 </script>
 </body>
 </html>
