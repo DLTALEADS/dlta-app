@@ -17,6 +17,11 @@
   var currentSource = SOURCES[0].id;
   var AGENT_NAME = 'Tom Mackrola';
   var COMPANY_NAME = 'Delta Realty Corp';
+  // EspoCRM integration — generate a key at EspoCRM Admin > API Keys (Meeting read/write).
+  // CORS: in EspoCRM Admin > Config, add this app's origin to CORS allowed list.
+  // Leave ESPO_API_KEY empty to run Calendar in lead-followup-only mode (no EspoCRM I/O).
+  var ESPO_URL = 'https://crm.dltaleads.com';
+  var ESPO_API_KEY = '';   // ← fill in before deploying
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -274,6 +279,60 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 .rp-setup button { width: 100%; padding: 13px; background: #2D6BFF; border: none; border-radius: 12px; color: #fff; font-size: 15px; font-weight: 800; cursor: pointer; font-family: inherit; }
 .rp-setup .rp-err { color: #FF9F0A; font-size: 12px; margin-bottom: 10px; }
 .rp-state { margin: auto; text-align: center; color: #8A8A8E; font-size: 14px; padding: 30px; }
+
+/* Bottom nav: allow horizontal scroll when many tabs are present */
+.dl-bottom-nav { overflow-x: auto; scrollbar-width: none; -webkit-overflow-scrolling: touch; }
+.dl-bottom-nav::-webkit-scrollbar { display: none; }
+.dl-nav-btn { min-width: 56px; flex-shrink: 0; }
+
+/* Calendar screen */
+.cal-toolbar { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 0 2px; }
+.cal-nav { display: flex; align-items: center; gap: 6px; }
+.cal-nav-btn { background: #1A1A1C; border: 1px solid #2A2A2E; border-radius: 10px; color: #F1F1F3; font-size: 20px; width: 34px; height: 34px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit; flex-shrink: 0; }
+.cal-add-btn { background: #2D6BFF; border: none; border-radius: 50%; color: #fff; font-size: 20px; width: 34px; height: 34px; cursor: pointer; display: flex; align-items: center; justify-content: center; font-family: inherit; flex-shrink: 0; line-height: 1; }
+.cal-nav-title { font-size: 14px; font-weight: 800; color: #F1F1F3; white-space: nowrap; min-width: 100px; text-align: center; }
+/* Day-of-week header */
+.cal-dow-row { display: grid; grid-template-columns: repeat(7, 1fr); padding: 0 4px; }
+.cal-dow-cell { text-align: center; font-size: 10px; font-weight: 800; color: #8A8A8E; padding: 6px 0; text-transform: uppercase; }
+/* Month grid */
+.cal-month-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: #2A2A2E; margin: 0 4px; }
+.cal-day-cell { background: #0A0A0B; min-height: 68px; padding: 4px; cursor: pointer; overflow: hidden; }
+.cal-day-cell.today { background: #0F1A35; }
+.cal-day-cell.other-month { background: #060609; }
+.cal-day-num { font-size: 12px; font-weight: 800; color: #F1F1F3; margin-bottom: 3px; line-height: 1; }
+.cal-day-cell.today .cal-day-num { color: #2D6BFF; }
+.cal-day-cell.other-month .cal-day-num { color: #3A3A3E; }
+.cal-pill { font-size: 9px; font-weight: 700; padding: 1px 4px; border-radius: 4px; margin-bottom: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: block; }
+.cal-pill-appt { background: #0F1A35; color: #2D6BFF; }
+.cal-pill-followup { background: #1a1200; color: #FF9F0A; }
+.cal-pill-showing { background: #0E2A14; color: #34C759; }
+.cal-pill-block { background: #1a0a1f; color: #8B5CF6; }
+/* Week view */
+.cal-week-scroll { overflow-x: auto; -webkit-overflow-scrolling: touch; }
+.cal-week-grid { display: grid; grid-template-columns: 36px repeat(7, 1fr); min-width: 380px; }
+.cal-wk-head { text-align: center; font-size: 10px; font-weight: 800; color: #8A8A8E; padding: 5px 2px; border-bottom: 1px solid #2A2A2E; }
+.cal-wk-time { font-size: 9px; color: #8A8A8E; text-align: right; padding: 2px 5px 0 0; height: 44px; overflow: hidden; }
+.cal-wk-slot { height: 44px; border-top: 1px solid #1A1A1C; position: relative; cursor: pointer; }
+/* Day view */
+.cal-day-row { display: flex; min-height: 44px; border-bottom: 1px solid #1A1A1C; gap: 8px; padding: 0 4px; }
+.cal-day-time { font-size: 10px; color: #8A8A8E; width: 40px; flex-shrink: 0; padding-top: 4px; text-align: right; }
+.cal-day-events { flex: 1; padding: 4px 0; }
+/* Event cards used in week/day view */
+.cal-event-card { padding: 3px 6px; border-radius: 6px; margin-bottom: 2px; cursor: pointer; }
+.cal-event-card.appt { background: #0F1A35; border-left: 3px solid #2D6BFF; }
+.cal-event-card.followup { background: #1a1200; border-left: 3px solid #FF9F0A; }
+.cal-event-card.showing { background: #0E2A14; border-left: 3px solid #34C759; }
+.cal-event-card.block { background: #1a0a1f; border-left: 3px solid #8B5CF6; }
+.cal-event-name { font-size: 11px; font-weight: 700; color: #F1F1F3; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-event-time { font-size: 10px; color: #8A8A8E; }
+.cal-state { text-align: center; padding: 40px 16px; color: #8A8A8E; font-size: 14px; }
+.cal-error-banner { background: #1a1200; border: 1px solid #d97706; border-radius: 10px; padding: 8px 12px; font-size: 12px; color: #FF9F0A; margin: 0 4px 8px; }
+/* Appointment type buttons inside modal */
+.appt-type-btn { padding: 10px 6px; border-radius: 12px; border: 1px solid #2A2A2E; background: #1A1A1C; color: #8A8A8E; font-size: 12px; font-weight: 700; text-align: center; cursor: pointer; font-family: inherit; }
+.appt-type-btn.sel { border-color: #2D6BFF; color: #2D6BFF; background: #0F1A35; }
+.appt-type-btn.sel-orange { border-color: #FF9F0A; color: #FF9F0A; background: #1a1200; }
+.appt-type-btn.sel-green { border-color: #34C759; color: #34C759; background: #0E2A14; }
+.appt-type-btn.sel-purple { border-color: #8B5CF6; color: #8B5CF6; background: #1a0a1f; }
 </style>
 </head>
 <body>
@@ -318,6 +377,37 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
 </div>
 
+<!-- Add Appointment modal: used from lead detail and from Calendar "+" button -->
+<div class="modal" id="addApptModal">
+  <div class="modal-box">
+    <div class="modal-title" id="addApptTitle">Add Appointment</div>
+    <div class="section-label" style="margin-top:0">Type</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:8px" id="apptTypeGrid">
+      <button class="appt-type-btn" data-type="appointment" onclick="calSelectApptType(this,'appointment')">&#128197; Client Appt</button>
+      <button class="appt-type-btn" data-type="followup" onclick="calSelectApptType(this,'followup')">&#128260; Follow-Up</button>
+      <button class="appt-type-btn" data-type="showing" onclick="calSelectApptType(this,'showing')">&#127968; Showing</button>
+      <button class="appt-type-btn" data-type="block" onclick="calSelectApptType(this,'block')">&#128193; Time Block</button>
+    </div>
+    <div class="section-label">Date &amp; Time</div>
+    <input class="field-input" type="datetime-local" id="apptDateStart" style="margin-top:8px">
+    <div class="section-label">Duration</div>
+    <select class="field-input" id="apptDuration" style="margin-top:8px;cursor:pointer;background:var(--card)">
+      <option value="30">30 minutes</option>
+      <option value="60" selected>1 hour</option>
+      <option value="90">1.5 hours</option>
+      <option value="120">2 hours</option>
+      <option value="180">3 hours</option>
+    </select>
+    <div class="section-label">Title</div>
+    <input class="field-input" type="text" id="apptTitle" placeholder="e.g. Client meeting — John Smith" style="margin-top:8px">
+    <div class="section-label">Notes</div>
+    <textarea class="field-input" id="apptNotes" rows="2" placeholder="Optional notes..." style="margin-top:8px;min-height:60px;resize:none"></textarea>
+    <button class="save-btn" id="apptSaveBtn" onclick="calSaveAppt()">&#128190; Save Appointment</button>
+    <div id="apptError" style="color:#FF453A;font-size:12px;margin-top:6px;display:none;line-height:1.4"></div>
+    <button class="modal-close" onclick="calCloseApptModal()">Cancel</button>
+  </div>
+</div>
+
 <!-- Canned text template dropdown: anchored to the lead's Text button -->
 <div class="tmpl-backdrop" id="tmplBackdrop" onclick="closeTextMenu()"></div>
 <div class="tmpl-menu" id="tmplMenu"></div>
@@ -329,6 +419,27 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <div class="dl-screen-sub">Live from your loaded leads</div>
   </div>
   <div class="dl-body" id="activityBody"></div>
+</div>
+
+<!-- Calendar screen: day/week/month views, events from EspoCRM + lead follow-up dates -->
+<div class="dl-screen" id="calendarScreen">
+  <div class="dl-screen-header">
+    <div class="dl-screen-title">Calendar</div>
+    <div class="cal-toolbar">
+      <div style="display:flex;gap:3px;background:#1A1A1C;border:1px solid #2A2A2E;border-radius:12px;padding:3px">
+        <button class="source-seg active" id="calViewMonth" onclick="calSetView('month')">Month</button>
+        <button class="source-seg" id="calViewWeek" onclick="calSetView('week')">Week</button>
+        <button class="source-seg" id="calViewDay" onclick="calSetView('day')">Day</button>
+      </div>
+      <div class="cal-nav">
+        <button class="cal-nav-btn" onclick="calNavPrev()">&#8249;</button>
+        <div class="cal-nav-title" id="calNavTitle"></div>
+        <button class="cal-nav-btn" onclick="calNavNext()">&#8250;</button>
+        <button class="cal-add-btn" onclick="openAddApptModal(null,'block')" title="New event">+</button>
+      </div>
+    </div>
+  </div>
+  <div id="calBody"></div>
 </div>
 
 <!-- Goals screen: income and conversion math -->
@@ -600,6 +711,19 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
 
 </div>
 
+<!-- CRM screen: fallback for when window.open is blocked; same pattern as Forms -->
+<div class="dl-screen" id="crmScreen">
+  <div class="dl-screen-header">
+    <div class="dl-screen-title">CRM</div>
+    <div class="dl-screen-sub">EspoCRM — Inbox, Campaigns, Tasks, Newsletters</div>
+  </div>
+  <div class="dl-body">
+    <div class="dl-forms-wrap">
+      <button class="dl-open-forms" onclick="openCRM()">Open CRM</button>
+    </div>
+  </div>
+</div>
+
 <!-- Roleplay screen: AI objection-handling coach. Calls the Anthropic API
      directly from the browser using the session-stored key. -->
 <div class="dl-screen" id="roleplayScreen">
@@ -617,12 +741,14 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
 </div>
 
-<!-- Bottom tab bar: show/hide screen divs, no router -->
+<!-- Bottom tab bar: show/hide screen divs, no router. Scrollable for 7 tabs. -->
 <div class="dl-bottom-nav">
   <button class="dl-nav-btn active" id="navLeads" onclick="showTab('leads')"><span class="dl-nav-ico">📋</span>Leads</button>
   <button class="dl-nav-btn" id="navActivity" onclick="showTab('activity')"><span class="dl-nav-ico">📊</span>Activity</button>
+  <button class="dl-nav-btn" id="navCalendar" onclick="showTab('calendar')"><span class="dl-nav-ico">📅</span>Calendar</button>
   <button class="dl-nav-btn" id="navGoals" onclick="showTab('goals')"><span class="dl-nav-ico">🎯</span>Goals</button>
   <button class="dl-nav-btn" id="navForms" onclick="showTab('forms')"><span class="dl-nav-ico">📄</span>Forms</button>
+  <button class="dl-nav-btn" id="navCRM" onclick="openCRM()"><span class="dl-nav-ico">🏢</span>CRM</button>
   <button class="dl-nav-btn" id="navRoleplay" onclick="showTab('roleplay')"><span class="dl-nav-ico">🎙️</span>Roleplay</button>
 </div>
 
@@ -1123,6 +1249,7 @@ function renderDetail() {
   html += '<button class="action-btn btn-mail" onclick="logTouch(\'mail sent\')"><span class="icon">✉️</span>Mail Sent</button>';
   html += '<button class="action-btn btn-card" onclick="logTouch(\'letter sent\')"><span class="icon">📄</span>Letter Sent</button>';
   html += '</div>';
+  html += '<button class="action-btn" style="width:100%;background:#1a0a1f;border:1px solid #8B5CF6;color:#8B5CF6;margin-bottom:4px" onclick="openAddApptModal(' + currentId + ',\'appointment\')"><span class="icon">📅</span>Add to Calendar</button>';
 
   html += '<div class="section-label">Best Phone</div>';
   html += '<div class="best-row"><input class="best-input" id="bestPhoneInput" type="tel" placeholder="Confirmed best number" value="' + l.bestPhone + '"><button class="best-call" onclick="dialBest()">📞</button></div>';
@@ -1418,16 +1545,21 @@ function showTab(name) {
   activeScreen = name;
   document.getElementById('listView').style.display = (name === 'leads') ? 'block' : 'none';
   document.getElementById('activityScreen').style.display = (name === 'activity') ? 'block' : 'none';
+  document.getElementById('calendarScreen').style.display = (name === 'calendar') ? 'block' : 'none';
   document.getElementById('goalsScreen').style.display = (name === 'goals') ? 'block' : 'none';
   document.getElementById('formsScreen').style.display = (name === 'forms') ? 'block' : 'none';
+  document.getElementById('crmScreen').style.display = (name === 'crm') ? 'block' : 'none';
   document.getElementById('roleplayScreen').style.display = (name === 'roleplay') ? 'flex' : 'none';
   _setNav('navLeads', name === 'leads');
   _setNav('navActivity', name === 'activity');
+  _setNav('navCalendar', name === 'calendar');
   _setNav('navGoals', name === 'goals');
   _setNav('navForms', name === 'forms');
+  _setNav('navCRM', name === 'crm');
   _setNav('navRoleplay', name === 'roleplay');
   if (name === 'activity') renderActivity();
   if (name === 'goals') renderGoals();
+  if (name === 'calendar') renderCalendar();
   if (name === 'roleplay') renderRoleplay();
   window.scrollTo(0, 0);
 }
@@ -1439,6 +1571,12 @@ function _setNav(id, on) { var e = document.getElementById(id); if (e) e.classNa
 function openForms() {
   var w = window.open('https://forms.dltaleads.com', '_blank', 'noopener');
   if (!w) showTab('forms');
+}
+
+// Opens EspoCRM in a new browser tab. Same pattern as openForms().
+function openCRM() {
+  var w = window.open(ESPO_URL, '_blank', 'noopener');
+  if (!w) showTab('crm');
 }
 
 // Infers load state from the data and the existing dialer DOM, without
@@ -1787,6 +1925,463 @@ function rpCallApi() {
       rpError = err.message || 'Could not reach the Anthropic API.';
       rpRenderThread();
     });
+}
+
+// ── Calendar ─────────────────────────────────────────────────────────────────
+// Events come from two sources:
+//   1. EspoCRM Meeting entity via REST (when ESPO_API_KEY is set)
+//   2. Lead follow_up_date fields from the already-loaded leads array
+// EspoCRM is the write target and source of truth for real appointments.
+// Follow-up events from leads are read-only overlays (orange, source='lead').
+
+var calView = 'month';
+var calDate = new Date();
+var calEvents = [];       // [{id, title, start, end, type, leadRow, source}]
+var calLoading = false;
+var calError = '';
+var _apptLeadRow = null;  // set when modal is opened from a lead detail
+var _apptType = 'appointment';
+
+var CAL_MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+var CAL_DAYS_LONG = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+var CAL_DAYS_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+var CAL_DAYS_MED = ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+var CAL_MONTHS_SHORT = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+
+var CAL_TYPE_LABEL = { appointment:'Client Appt', followup:'Follow-Up', showing:'Showing', block:'Time Block' };
+var CAL_PILL_CLASS = { appointment:'cal-pill-appt', followup:'cal-pill-followup', showing:'cal-pill-showing', block:'cal-pill-block' };
+var CAL_CARD_CLASS = { appointment:'appt', followup:'followup', showing:'showing', block:'block' };
+
+function _pad2(n) { return n < 10 ? '0' + n : String(n); }
+function _dateStr(d) { return d.getFullYear() + '-' + _pad2(d.getMonth() + 1) + '-' + _pad2(d.getDate()); }
+function _fmtTime(d) {
+  if (!d) return '';
+  var h = d.getHours(), m = d.getMinutes(), ampm = h >= 12 ? 'PM' : 'AM';
+  h = h % 12 || 12;
+  return h + ':' + (m < 10 ? '0' : '') + m + ' ' + ampm;
+}
+function _esc(s) {
+  return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+// Build the EspoCRM datetime string (local time, no timezone offset)
+function _espoDateTime(d) {
+  return d.getFullYear() + '-' + _pad2(d.getMonth()+1) + '-' + _pad2(d.getDate()) +
+    ' ' + _pad2(d.getHours()) + ':' + _pad2(d.getMinutes()) + ':00';
+}
+
+// Infer event type from EspoCRM meeting name or description tag
+function _calGuessType(name, desc) {
+  var t = (name + ' ' + (desc || '')).toLowerCase();
+  if (t.indexOf('[type:followup]') !== -1 || t.indexOf('follow') !== -1 || t.indexOf('callback') !== -1) return 'followup';
+  if (t.indexOf('[type:showing]') !== -1 || t.indexOf('showing') !== -1) return 'showing';
+  if (t.indexOf('[type:block]') !== -1 || t.indexOf('block') !== -1 || t.indexOf('admin') !== -1 || t.indexOf('prospect') !== -1) return 'block';
+  return 'appointment';
+}
+
+// Collect lead follow_up_date entries as calendar overlay events
+function _calLeadFollowups() {
+  var arr = (typeof leads !== 'undefined' && leads) ? leads : [];
+  var evs = [];
+  for (var i = 0; i < arr.length; i++) {
+    var l = arr[i];
+    if (!l.followUp) continue;
+    var ms = _parseDateMs(l.followUp);
+    if (isNaN(ms)) continue;
+    evs.push({
+      id: 'lead-fu-' + l.row,
+      title: l.nextAction ? l.nextAction : 'Follow up: ' + l.name,
+      start: new Date(ms),
+      end: null,
+      type: 'followup',
+      leadRow: l.row,
+      source: 'lead'
+    });
+  }
+  return evs;
+}
+
+// Fetch the date range covered by the current view (for the EspoCRM query)
+function _calRangeStart() {
+  var d = new Date(calDate.getFullYear(), calDate.getMonth(), calDate.getDate());
+  if (calView === 'month') {
+    d.setDate(1);
+    d.setDate(d.getDate() - d.getDay());
+  } else if (calView === 'week') {
+    d.setDate(d.getDate() - d.getDay());
+  }
+  return _espoDateTime(d).split(' ')[0] + ' 00:00:00';
+}
+function _calRangeEnd() {
+  var d = new Date(calDate.getFullYear(), calDate.getMonth(), calDate.getDate());
+  if (calView === 'month') {
+    d.setMonth(d.getMonth() + 1, 0);
+    d.setDate(d.getDate() + (6 - d.getDay()));
+  } else if (calView === 'week') {
+    d.setDate(d.getDate() + (6 - d.getDay()));
+  }
+  return _espoDateTime(d).split(' ')[0] + ' 23:59:59';
+}
+
+function calFetchEvents() {
+  calError = '';
+  if (!ESPO_API_KEY) {
+    // No API key — show lead follow-ups only
+    calEvents = _calLeadFollowups();
+    calLoading = false;
+    _renderCalBody();
+    return;
+  }
+  calLoading = true;
+  _renderCalBody();
+  var from = _calRangeStart(), to = _calRangeEnd();
+  var qs = 'where[0][type]=between&where[0][attribute]=dateStart' +
+    '&where[0][value][]=' + encodeURIComponent(from) +
+    '&where[0][value][]=' + encodeURIComponent(to) +
+    '&maxSize=200&offset=0';
+  fetch(ESPO_URL + '/api/v1/Meeting?' + qs, {
+    headers: { 'X-Api-Key': ESPO_API_KEY }
+  })
+  .then(function(r) {
+    if (!r.ok) throw new Error('EspoCRM ' + r.status);
+    return r.json();
+  })
+  .then(function(data) {
+    var list = data.list || [];
+    calEvents = list.map(function(m) {
+      return {
+        id: m.id,
+        title: m.name || 'Meeting',
+        start: new Date(m.dateStart),
+        end: m.dateEnd ? new Date(m.dateEnd) : null,
+        type: _calGuessType(m.name || '', m.description || ''),
+        source: 'espo'
+      };
+    });
+    var fups = _calLeadFollowups();
+    for (var i = 0; i < fups.length; i++) calEvents.push(fups[i]);
+    calLoading = false;
+    _renderCalBody();
+  })
+  .catch(function(err) {
+    calError = err.message || 'Could not reach EspoCRM';
+    calEvents = _calLeadFollowups();
+    calLoading = false;
+    _renderCalBody();
+  });
+}
+
+// ── Navigation ────────────────────────────────────────────────────────────────
+function calNavPrev() {
+  if (calView === 'month') calDate.setMonth(calDate.getMonth() - 1);
+  else if (calView === 'week') calDate.setDate(calDate.getDate() - 7);
+  else calDate.setDate(calDate.getDate() - 1);
+  renderCalendar();
+}
+function calNavNext() {
+  if (calView === 'month') calDate.setMonth(calDate.getMonth() + 1);
+  else if (calView === 'week') calDate.setDate(calDate.getDate() + 7);
+  else calDate.setDate(calDate.getDate() + 1);
+  renderCalendar();
+}
+function calSetView(v) {
+  calView = v;
+  var ids = ['Month','Week','Day'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById('calView' + ids[i]);
+    if (el) el.className = 'source-seg' + (ids[i].toLowerCase() === v ? ' active' : '');
+  }
+  renderCalendar();
+}
+
+function _calNavTitleStr() {
+  if (calView === 'month') return CAL_MONTHS[calDate.getMonth()] + ' ' + calDate.getFullYear();
+  if (calView === 'week') {
+    var ws = new Date(calDate); ws.setDate(ws.getDate() - ws.getDay());
+    var we = new Date(ws); we.setDate(we.getDate() + 6);
+    return CAL_MONTHS_SHORT[ws.getMonth()] + ' ' + ws.getDate() + ' – ' + CAL_MONTHS_SHORT[we.getMonth()] + ' ' + we.getDate();
+  }
+  return CAL_DAYS_LONG[calDate.getDay()] + ', ' + CAL_MONTHS[calDate.getMonth()] + ' ' + calDate.getDate();
+}
+
+// Main entry point called by showTab('calendar') and nav/view changes
+function renderCalendar() {
+  var titleEl = document.getElementById('calNavTitle');
+  if (titleEl) titleEl.textContent = _calNavTitleStr();
+  // Sync view button active state (also set by calSetView, but reset here on nav)
+  var ids = ['Month','Week','Day'];
+  for (var i = 0; i < ids.length; i++) {
+    var el = document.getElementById('calView' + ids[i]);
+    if (el) el.className = 'source-seg' + (ids[i].toLowerCase() === calView ? ' active' : '');
+  }
+  calFetchEvents();
+}
+
+function _calEventsForDate(ds) {
+  var out = [];
+  for (var i = 0; i < calEvents.length; i++) {
+    if (calEvents[i].start && _dateStr(calEvents[i].start) === ds) out.push(calEvents[i]);
+  }
+  out.sort(function(a, b) { return (a.start || 0) - (b.start || 0); });
+  return out;
+}
+
+// ── Render dispatcher ─────────────────────────────────────────────────────────
+function _renderCalBody() {
+  var body = document.getElementById('calBody');
+  if (!body) return;
+  if (calLoading) {
+    body.innerHTML = '<div class="cal-state"><div class="dl-spinner"></div>Loading events…</div>';
+    return;
+  }
+  var errorHtml = calError
+    ? '<div class="cal-error-banner">EspoCRM: ' + _esc(calError) + ' — showing lead follow-ups only.</div>'
+    : '';
+  var viewHtml = '';
+  if (calView === 'month') viewHtml = _renderMonthView();
+  else if (calView === 'week') viewHtml = _renderWeekView();
+  else viewHtml = _renderDayView();
+  body.innerHTML = errorHtml + viewHtml;
+}
+
+// ── Month view ────────────────────────────────────────────────────────────────
+function _renderMonthView() {
+  var today = _todayStr();
+  // Start grid on the Sunday before the 1st of the displayed month
+  var first = new Date(calDate.getFullYear(), calDate.getMonth(), 1);
+  var cur = new Date(first);
+  cur.setDate(cur.getDate() - cur.getDay());
+
+  var html = '<div class="cal-dow-row">';
+  for (var i = 0; i < 7; i++) html += '<div class="cal-dow-cell">' + CAL_DAYS_SHORT[i] + '</div>';
+  html += '</div><div class="cal-month-grid">';
+
+  for (var week = 0; week < 6; week++) {
+    for (var dow = 0; dow < 7; dow++) {
+      var ds = _dateStr(cur);
+      var isToday = ds === today;
+      var isOther = cur.getMonth() !== calDate.getMonth();
+      var cls = 'cal-day-cell' + (isToday ? ' today' : '') + (isOther ? ' other-month' : '');
+      html += '<div class="' + cls + '" onclick="calDayTap(\'' + ds + '\')">';
+      html += '<div class="cal-day-num">' + cur.getDate() + '</div>';
+      var evs = _calEventsForDate(ds);
+      for (var ei = 0; ei < Math.min(evs.length, 3); ei++) {
+        var ev = evs[ei];
+        html += '<div class="cal-pill ' + (CAL_PILL_CLASS[ev.type] || 'cal-pill-appt') + '">' + _esc(ev.title) + '</div>';
+      }
+      if (evs.length > 3) html += '<div class="cal-pill" style="color:#8A8A8E">+' + (evs.length - 3) + ' more</div>';
+      html += '</div>';
+      cur.setDate(cur.getDate() + 1);
+    }
+    // Stop after the row that ends in the next month (minimum 4 rows)
+    if (week >= 3 && cur.getMonth() !== calDate.getMonth()) break;
+  }
+  html += '</div>';
+  return html;
+}
+
+// Tap a day cell → switch to day view for that date
+function calDayTap(ds) {
+  var parts = ds.split('-');
+  calDate = new Date(Number(parts[0]), Number(parts[1]) - 1, Number(parts[2]));
+  calView = 'day';
+  renderCalendar();
+}
+
+// ── Week view ─────────────────────────────────────────────────────────────────
+function _renderWeekView() {
+  var ws = new Date(calDate); ws.setDate(ws.getDate() - ws.getDay());
+  var today = _todayStr();
+  var html = '<div class="cal-week-scroll"><div class="cal-week-grid">';
+  // Header row
+  html += '<div class="cal-wk-head"></div>';
+  for (var d = 0; d < 7; d++) {
+    var dd = new Date(ws); dd.setDate(dd.getDate() + d);
+    var ds = _dateStr(dd);
+    var hi = ds === today ? 'color:#2D6BFF' : '';
+    html += '<div class="cal-wk-head" style="' + hi + '">' + CAL_DAYS_MED[dd.getDay()] + '<br>' + CAL_MONTHS_SHORT[dd.getMonth()] + '&nbsp;' + dd.getDate() + '</div>';
+  }
+  // Time rows 7 AM – 9 PM
+  for (var h = 7; h <= 21; h++) {
+    var hLabel = (h > 12 ? (h - 12) : (h === 12 ? 12 : h)) + (h >= 12 ? 'P' : 'A');
+    html += '<div class="cal-wk-time">' + hLabel + '</div>';
+    for (var d = 0; d < 7; d++) {
+      var dd = new Date(ws); dd.setDate(dd.getDate() + d);
+      var ds = _dateStr(dd);
+      html += '<div class="cal-wk-slot" onclick="calDayTap(\'' + ds + '\')">';
+      var evs = _calEventsForDate(ds);
+      for (var ei = 0; ei < evs.length; ei++) {
+        var ev = evs[ei];
+        if (ev.start && ev.start.getHours() === h) {
+          html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+            + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
+            + '<div class="cal-event-time">' + _fmtTime(ev.start) + '</div></div>';
+        }
+      }
+      html += '</div>';
+    }
+  }
+  html += '</div></div>';
+  return html;
+}
+
+// ── Day view ──────────────────────────────────────────────────────────────────
+function _renderDayView() {
+  var ds = _dateStr(calDate);
+  var dayEvs = _calEventsForDate(ds);
+  var html = '<div style="padding:0 4px">';
+  var hasAny = false;
+  for (var h = 7; h <= 21; h++) {
+    var slotEvs = [];
+    for (var i = 0; i < dayEvs.length; i++) {
+      if (dayEvs[i].start && dayEvs[i].start.getHours() === h) slotEvs.push(dayEvs[i]);
+    }
+    // Only render slots that have events (or show a placeholder row for every hour)
+    var hLabel = (h > 12 ? (h - 12) : (h === 12 ? 12 : h)) + ':00 ' + (h >= 12 ? 'PM' : 'AM');
+    html += '<div class="cal-day-row"><div class="cal-day-time">' + hLabel + '</div><div class="cal-day-events">';
+    for (var ei = 0; ei < slotEvs.length; ei++) {
+      var ev = slotEvs[ei];
+      hasAny = true;
+      html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+        + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
+        + '<div class="cal-event-time">' + _fmtTime(ev.start) + (ev.end ? ' – ' + _fmtTime(ev.end) : '') + '</div>'
+        + '</div>';
+    }
+    html += '</div></div>';
+  }
+  if (!hasAny) html += '<div class="cal-state">No events — tap + to add one</div>';
+  html += '</div>';
+  return html;
+}
+
+// ── Add Appointment Modal ─────────────────────────────────────────────────────
+function openAddApptModal(leadRow, defaultType) {
+  _apptLeadRow = leadRow || null;
+  _apptType = defaultType || 'appointment';
+
+  // Default datetime: next round hour
+  var now = new Date();
+  now.setMinutes(0, 0, 0);
+  now.setHours(now.getHours() + 1);
+  var dtl = now.getFullYear() + '-' + _pad2(now.getMonth()+1) + '-' + _pad2(now.getDate()) +
+    'T' + _pad2(now.getHours()) + ':00';
+  document.getElementById('apptDateStart').value = dtl;
+
+  var l = leadRow ? getLead(leadRow) : null;
+  document.getElementById('apptTitle').value = l ? (CAL_TYPE_LABEL[_apptType] + ' — ' + l.name) : '';
+  document.getElementById('apptNotes').value = '';
+  document.getElementById('apptDuration').value = '60';
+  document.getElementById('apptError').style.display = 'none';
+  document.getElementById('apptSaveBtn').textContent = '💾 Save Appointment';
+  document.getElementById('apptSaveBtn').disabled = false;
+
+  var titleEl = document.getElementById('addApptTitle');
+  if (titleEl) titleEl.textContent = l ? ('Add Appointment — ' + l.name) : 'Add Appointment';
+
+  _calSyncTypeButtons(_apptType);
+  document.getElementById('addApptModal').classList.add('open');
+}
+
+function calCloseApptModal() {
+  document.getElementById('addApptModal').classList.remove('open');
+  _apptLeadRow = null;
+}
+
+function calSelectApptType(btn, type) {
+  _apptType = type;
+  _calSyncTypeButtons(type);
+}
+
+function _calSyncTypeButtons(type) {
+  var grid = document.getElementById('apptTypeGrid');
+  if (!grid) return;
+  var classMap = { appointment:'sel', followup:'sel-orange', showing:'sel-green', block:'sel-purple' };
+  var btns = grid.querySelectorAll('button');
+  for (var i = 0; i < btns.length; i++) {
+    var t = btns[i].getAttribute('data-type');
+    btns[i].className = 'appt-type-btn' + (t === type ? ' ' + (classMap[t] || 'sel') : '');
+  }
+}
+
+function calSaveAppt() {
+  var errEl = document.getElementById('apptError');
+  var btn = document.getElementById('apptSaveBtn');
+  errEl.style.display = 'none';
+
+  var dateStart = document.getElementById('apptDateStart').value;
+  var title = document.getElementById('apptTitle').value.trim();
+  var duration = parseInt(document.getElementById('apptDuration').value, 10) || 60;
+  var notes = document.getElementById('apptNotes').value.trim();
+
+  if (!dateStart) { errEl.textContent = 'Please select a date and time.'; errEl.style.display = 'block'; return; }
+  if (!title)     { errEl.textContent = 'Please enter a title.';          errEl.style.display = 'block'; return; }
+
+  var startDt = new Date(dateStart);
+  var endDt   = new Date(startDt.getTime() + duration * 60000);
+
+  // Optimistically add to local events so the calendar updates immediately
+  var localId = 'pending-' + Date.now();
+  var localEv = { id: localId, title: title, start: startDt, end: endDt, type: _apptType, leadRow: _apptLeadRow, source: 'espo' };
+  calEvents.push(localEv);
+
+  // If it's a follow-up, also write follow_up_date back to the sheet
+  if (_apptType === 'followup' && _apptLeadRow) {
+    var l = getLead(_apptLeadRow);
+    var fuDate = _dateStr(startDt);
+    if (l) l.followUp = fuDate;
+    saveToSheet(_apptLeadRow, { follow_up_date: fuDate });
+  }
+
+  if (!ESPO_API_KEY) {
+    // No key — save locally and update calendar; inform user
+    btn.textContent = '✅ Saved locally';
+    errEl.textContent = 'EspoCRM API key not set — event stored locally only (won\'t sync to CRM).';
+    errEl.style.color = '#FF9F0A';
+    errEl.style.display = 'block';
+    if (activeScreen === 'calendar') _renderCalBody();
+    setTimeout(function() { calCloseApptModal(); errEl.style.color = '#FF453A'; }, 2000);
+    return;
+  }
+
+  btn.textContent = 'Saving…';
+  btn.disabled = true;
+
+  var payload = {
+    name: title,
+    dateStart: _espoDateTime(startDt),
+    dateEnd: _espoDateTime(endDt),
+    status: 'Planned',
+    description: notes + (notes ? '\n' : '') + '[type:' + _apptType + ']' + (_apptLeadRow ? '\n[leadRow:' + _apptLeadRow + ']' : '')
+  };
+
+  fetch(ESPO_URL + '/api/v1/Meeting', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-Api-Key': ESPO_API_KEY },
+    body: JSON.stringify(payload)
+  })
+  .then(function(r) {
+    if (!r.ok) return r.json().then(function(e) { throw new Error((e && e.message) || 'Save failed (' + r.status + ')'); });
+    return r.json();
+  })
+  .then(function(data) {
+    // Replace temp id with real EspoCRM id
+    if (data && data.id) {
+      for (var i = 0; i < calEvents.length; i++) {
+        if (calEvents[i].id === localId) { calEvents[i].id = data.id; break; }
+      }
+    }
+    btn.textContent = '✅ Saved!';
+    if (activeScreen === 'calendar') _renderCalBody();
+    setTimeout(calCloseApptModal, 900);
+  })
+  .catch(function(err) {
+    // Remove the optimistic event on failure
+    calEvents = calEvents.filter(function(e) { return e.id !== localId; });
+    btn.textContent = '💾 Save Appointment';
+    btn.disabled = false;
+    errEl.textContent = err.message;
+    errEl.style.display = 'block';
+  });
 }
 
 showTab('leads');
