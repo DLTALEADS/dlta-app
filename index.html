@@ -1570,6 +1570,8 @@ function calShow() {
     initialView: 'dayGridMonth',
     headerToolbar: { left: 'prev,next today', center: 'title', right: 'dayGridMonth,timeGridWeek' },
     height: 'auto',
+    scrollTime: '08:00:00',
+    eventMinHeight: 24,
     events: function(info, successCb, failureCb) {
       var s = toEspoUTC(info.start);
       var e = toEspoUTC(info.end);
@@ -1580,11 +1582,20 @@ function calShow() {
         .then(function(r) { return r.json(); })
         .then(function(data) {
           successCb((data.list || []).map(function(m) {
+            var start = m.dateStart ? m.dateStart.replace(' ', 'T') : null;
+            var end = m.dateEnd ? m.dateEnd.replace(' ', 'T') : null;
+            // Guarantee at least 30-min block so events are visible in week/day view
+            if (start && (!end || end === start)) {
+              var d = new Date(start); d.setMinutes(d.getMinutes() + 30);
+              function p(n) { return String(n).padStart(2, '0'); }
+              end = d.getFullYear() + '-' + p(d.getMonth()+1) + '-' + p(d.getDate()) +
+                'T' + p(d.getHours()) + ':' + p(d.getMinutes()) + ':00';
+            }
             return {
               id: m.id,
               title: m.name,
-              start: m.dateStart ? m.dateStart.replace(' ', 'T') + 'Z' : null,
-              end: m.dateEnd ? m.dateEnd.replace(' ', 'T') + 'Z' : null,
+              start: start,
+              end: end,
               color: m.status === 'Held' ? '#16a34a' : m.status === 'Not Held' ? '#dc2626' : '#2563eb',
               extendedProps: { desc: m.description || '', status: m.status }
             };
