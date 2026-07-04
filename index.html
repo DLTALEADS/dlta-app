@@ -22,6 +22,9 @@
   // CRM tab deep-link (openCRM), which opens the site in a new tab.
   var ESPO_URL = 'https://crm.dltaleads.com';
   var CAL_WORKER = 'https://late-shadow-77ad.dltaleadsystem.workers.dev';
+  // EspoCRM user ID for the calendar owner — find it at crm.dltaleads.com,
+  // top-right avatar → Profile; the URL ends with #User/view/<this-id>.
+  var ESPO_ASSIGNED_USER_ID = '';
 </script>
 <style>
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -1634,10 +1637,11 @@ function rpCallApi() {
 
 // ── Calendar ─────────────────────────────────────────────────────────────────
 // Events come from two sources:
-//   1. EspoCRM Meeting entity via REST (when ESPO_API_KEY is set)
+//   1. EspoCRM Meeting + Call entities via Cloudflare Worker proxy (/espo/*)
 //   2. Lead follow_up_date fields from the already-loaded leads array
 // EspoCRM is the write target and source of truth for real appointments.
 // Follow-up events from leads are read-only overlays (orange, source='lead').
+// Appointment types: appointment/showing/block → Meeting; followup → Call.
 
 var calView = 'month';
 var calDate = new Date();
@@ -1728,6 +1732,17 @@ function _calRangeEnd() {
   return _espoDateTime(d).split(' ')[0] + ' 23:59:59';
 }
 
+function _mapEspoEvent(rec) {
+  return {
+    id: rec.id,
+    title: rec.name || 'Event',
+    start: rec.dateStart ? new Date(rec.dateStart) : null,
+    end: rec.dateEnd ? new Date(rec.dateEnd) : null,
+    type: _calGuessType(rec.name || '', rec.description || ''),
+    source: 'espo'
+  };
+}
+
 function calFetchEvents() {
   calError = '';
   calLoading = true;
@@ -1737,23 +1752,20 @@ function calFetchEvents() {
     '&where[0][value][]=' + encodeURIComponent(from) +
     '&where[0][value][]=' + encodeURIComponent(to) +
     '&maxSize=200&offset=0';
-  fetch(CAL_WORKER + '/espo/Meeting?' + qs)
-  .then(function(r) {
-    if (!r.ok) throw new Error('EspoCRM ' + r.status);
+  var fetchMeetings = fetch(CAL_WORKER + '/espo/Meeting?' + qs).then(function(r) {
+    if (!r.ok) throw new Error('Meetings ' + r.status);
     return r.json();
-  })
-  .then(function(data) {
-    var list = data.list || [];
-    calEvents = list.map(function(m) {
-      return {
-        id: m.id,
-        title: m.name || 'Meeting',
-        start: new Date(m.dateStart),
-        end: m.dateEnd ? new Date(m.dateEnd) : null,
-        type: _calGuessType(m.name || '', m.description || ''),
-        source: 'espo'
-      };
-    });
+  });
+  var fetchCalls = fetch(CAL_WORKER + '/espo/Call?' + qs).then(function(r) {
+    if (!r.ok) throw new Error('Calls ' + r.status);
+    return r.json();
+  });
+  Promise.all([fetchMeetings, fetchCalls])
+  .then(function(results) {
+    var meetings = (results[0].list || []).map(_mapEspoEvent);
+    var calls    = (results[1].list || []).map(_mapEspoEvent);
+    calEvents = meetings.concat(calls);
+    calEvents.sort(function(a, b) { return (a.start || 0) - (b.start || 0); });
     var fups = _calLeadFollowups();
     for (var i = 0; i < fups.length; i++) calEvents.push(fups[i]);
     calLoading = false;
@@ -2031,15 +2043,19 @@ function calSaveAppt() {
   btn.textContent = 'Saving…';
   btn.disabled = true;
 
+  var isCall = (_apptType === 'followup');
+  var entity = isCall ? 'Call' : 'Meeting';
   var payload = {
     name: title,
     dateStart: _espoDateTime(startDt),
     dateEnd: _espoDateTime(endDt),
     status: 'Planned',
+    assignedUserId: ESPO_ASSIGNED_USER_ID,
     description: notes + (notes ? '\n' : '') + '[type:' + _apptType + ']' + (_apptLeadRow ? '\n[leadRow:' + _apptLeadRow + ']' : '')
   };
+  if (isCall) payload.direction = 'Outbound';
 
-  fetch(CAL_WORKER + '/espo/Meeting', {
+  fetch(CAL_WORKER + '/espo/' + entity, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(payload)
