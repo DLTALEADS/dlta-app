@@ -1018,6 +1018,9 @@ function loadLeads() {
       leads = [];
       for (var i = 1; i < rows.length; i++) {
         var row = rows[i];
+        // A duplicate header row pasted into the data renders as a junk lead
+        // called "owner_name". Skip any row that is really a header.
+        if (String(row[0] || '').trim() === 'lead_id') continue;
         var r = {};
         for (var j = 0; j < headers.length; j++) {
           r[headers[j]] = row[j] !== undefined ? row[j] : '';
