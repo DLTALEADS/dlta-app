@@ -350,6 +350,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     </div>
     <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
       <div class="tabs" id="tabBar" style="flex:1;margin-bottom:0"></div>
+      <button id="freshBtn" onclick="toggleHideOld()" title="Hide leads older than 30 days that have never been worked" style="background:var(--accent);border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🕐 Fresh 30d</button>
       <button id="sortBtn" onclick="toggleSaleSort()" style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🔨 Sale Date</button>
     </div>
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
@@ -920,6 +921,42 @@ var TABS = [
   { key:'listed', label:'🏠 Listed' }
 ];
 var sortMode = 'default';
+// Hide stale leads by default so fresh ones are not buried. Never hides a
+// lead that has been worked, and never applies while searching.
+var hideOld = true;
+var STALE_DAYS = 30;
+
+// The sheet carries two date formats: ISO (new rows) and M/D/YYYY (older
+// rows). Returns a millisecond timestamp, or 0 when unparseable.
+function leadDateMs(d) {
+  d = String(d || '').trim();
+  if (!d) return 0;
+  var iso = d.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (iso) return Date.UTC(+iso[1], +iso[2] - 1, +iso[3]);
+  var us = d.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/);
+  if (us) return Date.UTC(+us[3], +us[1] - 1, +us[2]);
+  var t = Date.parse(d);
+  return isNaN(t) ? 0 : t;
+}
+
+function isStale(l) {
+  // Anything touched, scheduled, or mid-conversation always stays visible.
+  if (l.status !== 'new') return false;
+  if (l.followUp || l.nextAction || l.textSent) return false;
+  var ms = leadDateMs(l.date);
+  if (!ms) return false;               // unknown date: never hide it
+  return (Date.now() - ms) / 86400000 > STALE_DAYS;
+}
+
+function toggleHideOld() {
+  hideOld = !hideOld;
+  var b = document.getElementById('freshBtn');
+  if (b) {
+    b.style.background = hideOld ? 'var(--accent)' : 'var(--card)';
+    b.style.color = hideOld ? '#fff' : 'var(--muted)';
+  }
+  renderList();
+}
 var STATUSES = [
   {key:'new',label:'🔵 New'},
   {key:'called',label:'📞 Called'},
@@ -981,6 +1018,9 @@ function loadLeads() {
       leads = [];
       for (var i = 1; i < rows.length; i++) {
         var row = rows[i];
+        // A duplicate header row pasted into the data renders as a junk lead
+        // called "owner_name". Skip any row that is really a header.
+        if (String(row[0] || '').trim() === 'lead_id') continue;
         var r = {};
         for (var j = 0; j < headers.length; j++) {
           r[headers[j]] = row[j] !== undefined ? row[j] : '';
@@ -1019,7 +1059,8 @@ function loadLeads() {
           saleDate: String(r.sale_date || ''),
           publishDate: String(r.publish_date || ''),
           minBid: String(r.min_bid || ''),
-          leadCategory: String(r.lead_type || '').toUpperCase()
+          leadCategory: String(r.lead_type || '').toUpperCase(),
+          date: String(r.date || '')
         });
       }
       renderTabs();
@@ -1097,6 +1138,7 @@ function renderList() {
   var filtered = [];
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
+    if (hideOld && !q && isStale(l)) continue;
     if (activeTab === 'nos' && l.leadCategory !== 'NOS') continue;
     if (activeTab === 'lp' && l.leadCategory !== 'LP') continue;
     if (activeTab !== 'all' && activeTab !== 'nos' && activeTab !== 'lp' && l.status !== activeTab) continue;
@@ -1114,6 +1156,14 @@ function renderList() {
   document.getElementById('calledCount').textContent = worked;
   document.getElementById('totalCount').textContent = leads.length;
   document.getElementById('progressFill').style.width = pct + '%';
+  if (sortMode === 'default') {
+    // Newest leads first. Ties fall back to sheet position, and rows are
+    // appended chronologically, so later row = newer.
+    filtered.sort(function(a, b) {
+      var d = leadDateMs(b.date) - leadDateMs(a.date);
+      return d !== 0 ? d : b.row - a.row;
+    });
+  }
   if (sortMode === 'saledate') {
     filtered.sort(function(a, b) {
       var parseDate = function(d) {
