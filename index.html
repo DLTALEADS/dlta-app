@@ -43,6 +43,9 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .lookup-btn { background: var(--accent); border: none; border-radius: 10px; padding: 9px 14px; color: #fff; font-size: 13px; font-weight: 700; cursor: pointer; white-space: nowrap; }
 .tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
 .tabs::-webkit-scrollbar { display: none; }
+/* Phones: tabs get the full row, the Fresh / Sale Date buttons wrap below
+   instead of sitting on top of the LP tab. */
+@media (max-width: 700px) { .filter-row #tabBar { flex-basis: 100%; } }
 .tab { padding: 6px 14px; border-radius: 20px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap; background: var(--card); color: var(--muted); border: 1px solid var(--border); }
 .tab.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 .source-picker { display: flex; gap: 4px; background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 12px; padding: 4px; margin-bottom: 8px; }
@@ -348,8 +351,8 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
       <input class="search-input" id="searchInput" placeholder="Search name, address, zip..." oninput="renderList()">
       <button class="lookup-btn" onclick="openLookup()">📞 Lookup</button>
     </div>
-    <div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
-      <div class="tabs" id="tabBar" style="flex:1;margin-bottom:0"></div>
+    <div class="filter-row" style="display:flex;align-items:center;gap:8px;margin-bottom:6px;flex-wrap:wrap">
+      <div class="tabs" id="tabBar" style="flex:1;margin-bottom:0;min-width:0"></div>
       <button id="freshBtn" onclick="toggleHideOld()" title="Hide leads older than 30 days that have never been worked" style="background:var(--accent);border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:#fff;font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🕐 Fresh 30d</button>
       <button id="sortBtn" onclick="toggleSaleSort()" style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:6px 12px;color:var(--muted);font-size:11px;font-weight:700;cursor:pointer;white-space:nowrap;flex-shrink:0">🔨 Sale Date</button>
     </div>
@@ -1063,6 +1066,10 @@ function loadLeads() {
           date: String(r.date || '')
         });
       }
+      // No sale dates in the data (Landvoice exports do not carry them):
+      // hide the Sale Date sort rather than offer a button that does nothing.
+      var sb = document.getElementById('sortBtn');
+      if (sb) sb.style.display = leads.some(function(l) { return l.saleDate; }) ? '' : 'none';
       renderTabs();
       renderList();
     })
