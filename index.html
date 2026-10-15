@@ -1380,13 +1380,33 @@ function resolveTemplate(body, l) {
   if (l && l.address) body = body.split('{address}').join(l.address);
   return body;
 }
+// Builds the sms: link for the current device. iPhone and iPad keep the
+// existing iOS format (sms:NUMBER&body=), which is unchanged. A Mac desktop
+// (e.g. the office iMac running Messages) gets the standard format with a
+// +1 country code (sms:+1NUMBER?body=) so Messages opens prefilled.
+function isMacDesktop() {
+  var ua = navigator.userAgent || '';
+  var isMacUA = /Macintosh/.test(ua);
+  var hasTouch = (navigator.maxTouchPoints || 0) > 1; // iPadOS reports as Macintosh
+  return isMacUA && !hasTouch;
+}
+function smsLink(phone, body) {
+  var digits = String(phone || '').replace(/\D/g, '');
+  var encoded = encodeURIComponent(body);
+  if (!isMacDesktop()) return 'sms:' + digits + '&body=' + encoded;
+  var e164 = digits.length === 10 ? '+1' + digits
+           : (digits.length === 11 && digits.charAt(0) === '1') ? '+' + digits
+           : digits;
+  return 'sms:' + e164 + '?body=' + encoded;
+}
+
 function pickTemplate(c, m) {
   var l = getLead(currentId);
   var tmpl = TEMPLATES[c].messages[m];
   var body = resolveTemplate(tmpl.body, l);
   var phone = tmplPhone;
   closeTextMenu();
-  window.location.href = 'sms:' + phone + '&body=' + encodeURIComponent(body);
+  window.location.href = smsLink(phone, body);
   if (l) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
