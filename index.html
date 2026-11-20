@@ -364,7 +364,7 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   <div class="header">
     <div class="header-top">
       <div class="logo">DL<span>T</span>A</div>
-      <div class="stats"><b id="calledCount">0</b> worked · <b id="totalCount">0</b> total</div>
+      <div class="stats"><b id="calledCount">0</b> worked · <b id="totalCount">0</b> <span id="totalLabel">total</span></div>
     </div>
     <div class="whoami" id="whoami"></div>
     <div class="source-picker" id="sourcePicker"></div>
@@ -1359,11 +1359,17 @@ function renderList() {
     }
     filtered.push(l);
   }
-  var worked = 0;
-  for (var i = 0; i < leads.length; i++) { if (leads[i].status !== 'new') worked++; }
-  var pct = leads.length ? Math.round(worked / leads.length * 100) : 0;
+  // Scoreboard follows the view: your own leads, the pool, or (admin) everyone.
+  var worked = 0, inView = 0;
+  for (var i = 0; i < leads.length; i++) {
+    if (!ownerMatches(leads[i])) continue;
+    inView++;
+    if (leads[i].status !== 'new') worked++;
+  }
+  var pct = inView ? Math.round(worked / inView * 100) : 0;
   document.getElementById('calledCount').textContent = worked;
-  document.getElementById('totalCount').textContent = leads.length;
+  document.getElementById('totalCount').textContent = inView;
+  document.getElementById('totalLabel').textContent = ownerView === 'mine' ? 'mine' : ownerView === 'pool' ? 'in pool' : 'total';
   document.getElementById('progressFill').style.width = pct + '%';
   if (sortMode === 'default') {
     // Newest leads first. Ties fall back to sheet position, and rows are
