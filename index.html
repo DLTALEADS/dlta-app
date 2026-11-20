@@ -1980,7 +1980,7 @@ window.DLTA.adapter = {
   },
   // Computes metrics ONLY from the loaded leads array. Real numbers only.
   getMetrics: function () {
-    var arr = this.getLeads();
+    var arr = this.getLeads().filter(activityMatch);
     var total = arr.length;
     var breakdown = { new: 0, called: 0, callback: 0, appointment: 0, notinterested: 0, dnc: 0, listed: 0 };
     var worked = 0, contacted = 0, dncCount = 0, followUpsDue = 0;
@@ -2120,6 +2120,30 @@ function _ring(pct, color, center) {
     + '<text x="45" y="51" text-anchor="middle" fill="#F1F1F3" font-size="18" font-weight="800">' + center + '</text></svg>';
 }
 
+// Activity is per agent: your own claimed leads. Admins can switch agents or see everyone.
+var activityWho = '';
+function activityMatch(l) {
+  if (typeof SESSION === 'undefined' || !SESSION) return true;
+  var who = activityWho || SESSION.name;
+  return who === '__all' ? true : l.assignedTo === who;
+}
+function setActivityWho(w) { activityWho = w; renderActivity(); }
+function _activityScopeHtml() {
+  if (!SESSION) return '';
+  var who = activityWho || SESSION.name;
+  if (SESSION.role !== 'admin') {
+    return '<div style="font-size:13px;color:#8A8A8E;margin:0 0 10px">Your claimed leads, ' + SESSION.name + '</div>';
+  }
+  var opts = [SESSION.name];
+  for (var i = 0; i < AGENT_LIST.length; i++) if (opts.indexOf(AGENT_LIST[i]) === -1) opts.push(AGENT_LIST[i]);
+  var html = '<div class="source-picker" style="margin-bottom:12px;flex-wrap:wrap">';
+  for (var j = 0; j < opts.length; j++) {
+    html += '<button class="source-seg ' + (who === opts[j] ? 'active' : '') + '" onclick="setActivityWho(\'' + opts[j] + '\')">' + (opts[j] === SESSION.name ? 'Me' : opts[j]) + '</button>';
+  }
+  html += '<button class="source-seg ' + (who === '__all' ? 'active' : '') + '" onclick="setActivityWho(\'__all\')">Everyone</button></div>';
+  return html;
+}
+
 function renderActivity() {
   var body = document.getElementById('activityBody');
   if (!body) return;
@@ -2129,7 +2153,11 @@ function renderActivity() {
   if (state === 'empty') { body.innerHTML = '<div class="dl-state">No leads loaded yet.</div>'; return; }
 
   var m = window.DLTA.adapter.getMetrics();
-  var html = '';
+  var html = _activityScopeHtml();
+  if (!m.total) {
+    body.innerHTML = html + '<div class="dl-state">No claimed leads yet. Claim leads from the Pool and your activity shows up here.</div>';
+    return;
+  }
 
   html += '<div class="dl-card"><div class="dl-card-label">Coverage</div><div class="dl-rings">';
   html += '<div class="dl-ring">' + _ring(m.workedPct, '#2D6BFF', m.workedPct + '%') + '<div class="dl-ring-label">Worked<br>' + m.worked + ' of ' + m.total + '</div></div>';
