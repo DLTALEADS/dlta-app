@@ -26,18 +26,22 @@ function makeEnv() {
         },
         setValue: v => { while (data.length < row) data.push([]); const r = data[row - 1]; while (r.length < col) r.push(''); r[col - 1] = v; }
       }),
-      appendRow: r => data.push(r.slice())
+      appendRow: r => data.push(r.slice()),
+      deleteRow: r => data.splice(r - 1, 1)
     };
     tabs[name] = sheet;
     return sheet;
   }
   const ss = { getSheetByName: n => tabs[n] || null, insertSheet: n => makeSheet(n, []) };
-  const props = {}; const cache = {};
+  const props = {}; const cache = {}; const triggers = [];
   const toSigned = buf => Array.from(buf).map(b => (b > 127 ? b - 256 : b));
   const ctx = {
     SpreadsheetApp: { openById: () => ss },
     PropertiesService: { getScriptProperties: () => ({ getProperty: k => props[k] || null, setProperty: (k, v) => { props[k] = v; } }) },
     CacheService: { getScriptCache: () => ({ get: k => cache[k] || null, put: (k, v) => { cache[k] = v; }, remove: k => { delete cache[k]; } }) },
+    ScriptApp: { getProjectTriggers: () => triggers, newTrigger: fn => ({ timeBased: () => ({ everyDays: () => ({ atHour: () => ({ create: () => triggers.push({ getHandlerFunction: () => fn }) }) }) }) }) },
+    Session: { getScriptTimeZone: () => 'America/Chicago' },
+    console: { log: () => {} },
     LockService: { getScriptLock: () => ({ tryLock: () => true, releaseLock: () => {} }) },
     ContentService: { MimeType: { JSON: 'json' }, createTextOutput: s => ({ s, setMimeType() { return this; } }) },
     Utilities: {
@@ -47,6 +51,7 @@ function makeEnv() {
       computeHmacSha256Signature: (s, k) => toSigned(crypto.createHmac('sha256', k).update(s).digest()),
       base64EncodeWebSafe: x => Buffer.from(typeof x === 'string' ? Buffer.from(x, 'utf8') : x.map(b => b & 0xff)).toString('base64').replace(/\+/g, '-').replace(/\//g, '_'),
       base64DecodeWebSafe: s => Array.from(Buffer.from(s.replace(/-/g, '+').replace(/_/g, '/'), 'base64')),
+      formatDate: (d, tz, f) => (d.getMonth() + 1) + '/' + d.getDate() + '/' + d.getFullYear(),
       newBlob: bytes => ({ getDataAsString: () => Buffer.from(bytes).toString('utf8') })
     },
     Date, JSON, Math, String, Number, Object
@@ -57,11 +62,11 @@ function makeEnv() {
   // 45-column header like the live tab, plus two leads.
   const headers = ['lead_id', 'date', 'owner_name'];
   while (headers.length < 45) headers.push('col' + headers.length);
-  headers[20] = 'notes'; headers[21] = 'call_status'; headers[26] = 'lead_status';
+  headers[20] = 'notes'; headers[21] = 'call_status'; headers[22] = 'follow_up_date'; headers[26] = 'lead_status';
   const lead = id => { const r = headers.map(() => ''); r[0] = id; r[2] = 'Owner ' + id; return r; };
   makeSheet('dlta-leads-formatted', [headers, lead('L1'), lead('L2'), lead('L3')]);
   const call = req => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(req) } }).s);
-  return { ctx, tabs, call, cache };
+  return { ctx, tabs, call, cache, triggers };
 }
 
 let passed = 0;
@@ -172,6 +177,44 @@ test('resetPin lets an agent pick a new PIN', () => {
   ctx.resetPin('Tom');
   const r = call({ action: 'login', name: 'Tom', pin: '4321' });
   assert.ok(r.ok && r.firstTime);
+});
+
+test('setup creates appointments tab and exactly one daily sweep trigger', () => {
+  assert.ok(tabs.appointments);
+  ctx.setup();
+  assert.strictEqual(env.triggers.length, 1);
+});
+
+test('appointments: add, list own only, delete own only', () => {
+  const tom2 = call({ action: 'login', name: 'Tom', pin: '4321' }).token;
+  assert.strictEqual(call({ action: 'addAppt', token: tom2, appt: { title: 'x' } }).error, 'start_and_title_required');
+  const a = call({ action: 'addAppt', token: tom2, appt: { title: 'Listing appt', start: '2026-11-24T15:00', type: 'appointment', lead_row: 2 } });
+  assert.ok(a.ok);
+  call({ action: 'addAppt', token: yaser, appt: { title: 'Y appt', start: '2026-11-25T10:00' } });
+  assert.deepStrictEqual(call({ action: 'appts', token: tom2 }).appts.map(x => x.title), ['Listing appt']);
+  assert.strictEqual(call({ action: 'appts', token: george }).appts.length, 2);
+  assert.strictEqual(call({ action: 'deleteAppt', token: yaser, appt_id: a.appt_id }).code, 403);
+  assert.ok(call({ action: 'deleteAppt', token: tom2, appt_id: a.appt_id }).ok);
+  assert.strictEqual(call({ action: 'appts', token: tom2 }).appts.length, 0);
+});
+
+test('sweep returns missed follow-ups and idle claims to the pool, keeps the rest', () => {
+  const d = tabs[S].data;
+  const set = (row, fu, lastCall, owner, claimed, status) => {
+    d[row][22] = fu; d[row][46] = claimed; d[row][48] = lastCall; d[row][45] = owner; d[row][26] = status || 'called';
+  };
+  const now = '2026-11-20T12:00:00';
+  set(1, '2026-11-10', '2026-11-09T10:00:00Z', 'Tom', '2026-11-01'); // missed by 10 days -> return
+  set(2, '2026-11-19', '2026-11-18T10:00:00Z', 'Yaser', '2026-11-01'); // 1 day late, in grace -> keep
+  set(3, '', '', 'Tom', '2026-11-05T10:00:00Z'); // claimed 15 days, never called -> return
+  d.push(d[1].slice()); d[5][0] = 'L5'; set(5, '11/1/2026', '', 'Yaser', '2026-11-01', 'listed'); // listed -> keep
+  const out = ctx.sweepOverdue(now);
+  assert.strictEqual(out.length, 2);
+  assert.strictEqual(d[1][45], ''); assert.ok(/Back to pool from Tom: follow-up missed/.test(d[1][20]));
+  assert.strictEqual(d[2][45], 'Yaser');
+  assert.strictEqual(d[3][45], ''); assert.ok(/no call/.test(d[3][20]));
+  assert.strictEqual(d[5][45], 'Yaser');
+  assert.strictEqual(ctx.sweepOverdue(now).length, 0, 'second run changes nothing');
 });
 
 console.log('\n' + passed + ' tests passed');
