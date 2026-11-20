@@ -62,8 +62,10 @@ function makeEnv() {
   // 45-column header like the live tab, plus two leads.
   const headers = ['lead_id', 'date', 'owner_name'];
   while (headers.length < 45) headers.push('col' + headers.length);
+  headers[3] = 'address_street'; headers[12] = 'phone_1'; headers[27] = 'best_phone_number';
+  headers[28] = 'text_sent'; headers[29] = 'text_sent_timestamp'; headers[30] = 'lead_type';
   headers[20] = 'notes'; headers[21] = 'call_status'; headers[22] = 'follow_up_date'; headers[26] = 'lead_status';
-  const lead = id => { const r = headers.map(() => ''); r[0] = id; r[2] = 'Owner ' + id; return r; };
+  const lead = id => { const r = headers.map(() => ''); r[0] = id; r[2] = 'Owner ' + id; r[3] = id + ' Main St'; r[12] = '708555' + String(1000 + id.length); return r; };
   makeSheet('dlta-leads-formatted', [headers, lead('L1'), lead('L2'), lead('L3')]);
   const call = req => JSON.parse(ctx.doPost({ postData: { contents: JSON.stringify(req) } }).s);
   return { ctx, tabs, call, cache, triggers };
@@ -79,12 +81,13 @@ const S = 'dlta-leads-formatted';
 test('setup adds 4 columns after column 45 and an agents tab', () => {
   ctx.setup();
   const h = tabs[S].data[0];
-  assert.strictEqual(h.length, 49);
-  assert.deepStrictEqual(h.slice(45), ['assigned_to', 'assigned_at', 'last_called_by', 'last_called_at']);
+  assert.strictEqual(h.length, 53);
+  assert.deepStrictEqual(h.slice(45), ['assigned_to', 'assigned_at', 'last_called_by', 'last_called_at',
+    'drip_start', 'drip_step', 'drip_next', 'drip_status']);
   assert.strictEqual(h[0], 'lead_id');
   assert.strictEqual(tabs.agents.data.length, 5);
   ctx.setup(); // idempotent
-  assert.strictEqual(tabs[S].data[0].length, 49);
+  assert.strictEqual(tabs[S].data[0].length, 53);
 });
 
 test('a 45-column runner append still lands cleanly (pool)', () => {
@@ -215,6 +218,65 @@ test('sweep returns missed follow-ups and idle claims to the pool, keeps the res
   assert.strictEqual(d[3][45], ''); assert.ok(/no call/.test(d[3][20]));
   assert.strictEqual(d[5][45], 'Yaser');
   assert.strictEqual(ctx.sweepOverdue(now).length, 0, 'second run changes nothing');
+});
+
+test('setup starts the drip on leads claimed before the drip existed', () => {
+  const e = makeEnv(); e.ctx.setup();
+  const d = e.tabs[S].data;
+  d[1][45] = 'Tom'; d[2][45] = 'Tom'; d[2][26] = 'listed';
+  e.ctx.setup();
+  assert.strictEqual(d[1][52], 'active'); assert.strictEqual(d[2][52] || '', '', 'listed lead not started');
+  assert.strictEqual(d[3][52] || '', '', 'pool lead not started');
+});
+
+test('drip: claim starts it, text queued with agent name and address', () => {
+  const e = makeEnv(); e.ctx.setup();
+  const t = e.call({ action: 'login', name: 'Tom', pin: '1111' }).token;
+  const y = e.call({ action: 'login', name: 'Yaser', pin: '2222' }).token;
+  assert.ok(e.call({ action: 'claim', sheet: S, row: 2, lead_id: 'L1', token: t }).ok);
+  const row = e.tabs[S].data[1];
+  assert.strictEqual(row[52], 'active'); assert.strictEqual(row[50], 0);
+  const q = e.call({ action: 'dripQueue', token: t });
+  assert.strictEqual(q.items.length, 1);
+  assert.ok(/Tom/.test(q.items[0].text) && /L1 Main St/.test(q.items[0].text), q.items[0].text);
+  assert.ok(q.items[0].text.length <= 160, 'one bubble: ' + q.items[0].text.length);
+  assert.strictEqual(e.call({ action: 'dripQueue', token: y }).items.length, 0, 'Yaser does not see Tom queue');
+  assert.strictEqual(e.call({ action: 'dripSent', token: y, sheet: S, row: 2, lead_id: 'L1', step: 0 }).code, 403);
+  const m = e.call({ action: 'dripSent', token: t, sheet: S, row: 2, lead_id: 'L1', step: 0, text: q.items[0].text });
+  assert.ok(m.ok); assert.strictEqual(row[50], 1); assert.strictEqual(row[28], 'TRUE');
+  assert.ok(/Drip text sent/.test(row[20]));
+  assert.strictEqual(e.call({ action: 'dripSent', token: t, sheet: S, row: 2, lead_id: 'L1', step: 0 }).error, 'step_already_handled');
+  assert.strictEqual(e.call({ action: 'dripQueue', token: t }).items.length, 0, 'next step is in the future');
+  global.__dripEnv = { e, t, row };
+});
+
+test('drip: overdue call and mail steps run on their own; text steps wait', () => {
+  const { e, t, row } = global.__dripEnv;
+  const ago = new Date(); ago.setDate(ago.getDate() - 10);
+  row[49] = ago.toISOString(); row[51] = '2000-01-01';
+  const q = e.call({ action: 'dripQueue', token: t });
+  assert.strictEqual(q.items.length, 1); assert.strictEqual(q.items[0].msg, 'guide');
+  assert.ok(/lis_pendens_infographic/.test(q.items[0].text));
+  assert.ok(row[22], 'call step set a follow-up date');
+  assert.ok(e.call({ action: 'dripSkip', token: t, sheet: S, row: 2, lead_id: 'L1', step: 2 }).ok);
+  const q2 = e.call({ action: 'dripQueue', token: t });
+  assert.strictEqual(q2.items[0].msg, 'calls');
+  assert.strictEqual(e.tabs.mailers.data.length, 2, 'mail step added one postcard row');
+  assert.strictEqual(e.tabs.mailers.data[1][6], 'L1 Main St');
+});
+
+test('drip: a stop status ends it; sweep moves call days without the app open', () => {
+  const { e, t, row } = global.__dripEnv;
+  e.call({ action: 'save', token: t, sheet: S, row: 2, lead_id: 'L1', updates: { lead_status: 'appointment' } });
+  assert.strictEqual(row[52], 'stopped');
+  assert.strictEqual(e.call({ action: 'dripQueue', token: t }).items.length, 0);
+  e.call({ action: 'claim', sheet: S, row: 3, lead_id: 'L2', token: t });
+  const r2 = e.tabs[S].data[2];
+  const ago = new Date(); ago.setDate(ago.getDate() - 3);
+  r2[48] = ago.toISOString(); r2[50] = 1; r2[51] = '2000-01-01'; r2[49] = ago.toISOString();
+  e.ctx.sweepOverdue();
+  assert.strictEqual(r2[50], 2, 'call step advanced by the daily run');
+  assert.ok(r2[22], 'follow-up date set for the call day');
 });
 
 console.log('\n' + passed + ' tests passed');
