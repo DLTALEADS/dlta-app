@@ -5,7 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
 <title>DLTA Lead System</title>
 <script>
-  var API_KEY = 'AIzaSyDQLMYtGXu2phBO3twCN7YdqZaccO64CKo';
+  // All lead reads and writes go through the DLTA Dialer API (Apps Script,
+  // source in apps-script/Code.gs). It checks the login and who owns each lead.
+  var API_URL = 'https://script.google.com/macros/s/AKfycbwkCp5fv-lmzBs0gvr39XHUSKYtVvUqsabZykczzbEfms2GPgVf_fNoXIty3vWg02JQew/exec';
   var SHEET_ID = '1MlrW2RAdykKJFBbiIeNBlCwct7oepW_mrybhS3U1Wqw';
   // Lead sources the user can switch between. The id is the literal tab name,
   // used both for the Sheets read range and as the `sheet` param on every write,
@@ -51,6 +53,24 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .source-picker { display: flex; gap: 4px; background: #1A1A1C; border: 1px solid #2A2A2D; border-radius: 12px; padding: 4px; margin-bottom: 8px; }
 .source-seg { flex: 1; text-align: center; padding: 7px 10px; border-radius: 9px; font-size: 13px; font-weight: 700; color: #8A8A8E; background: transparent; border: none; cursor: pointer; font-family: inherit; white-space: nowrap; transition: background 0.15s, color 0.15s; }
 .source-seg.active { background: #2D6BFF; color: #fff; }
+.whoami { display: flex; justify-content: space-between; align-items: center; font-size: 12px; color: #8A8A8E; margin-bottom: 8px; }
+.whoami b { color: #fff; }
+.whoami button { background: none; border: 1px solid #2A2A2D; border-radius: 8px; color: #8A8A8E; font-size: 11px; padding: 3px 8px; cursor: pointer; font-family: inherit; }
+.owner-tag { font-size: 11px; color: #8A8A8E; border: 1px solid #2A2A2D; border-radius: 6px; padding: 1px 6px; }
+.owner-bar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 10px 16px; font-size: 13px; color: #8A8A8E; border-bottom: 1px solid #2A2A2D; }
+.owner-bar:empty { display: none; }
+.owner-bar b { color: #fff; }
+.owner-bar button, .owner-bar select { background: #2D6BFF; color: #fff; border: none; border-radius: 8px; padding: 6px 12px; font-size: 13px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.owner-bar select { background: #1A1A1C; border: 1px solid #2A2A2D; font-weight: 400; }
+#loginView { position: fixed; inset: 0; background: #0a0a0f; z-index: 9999; display: none; align-items: center; justify-content: center; padding: 24px; }
+#loginView.open { display: flex; }
+.login-box { width: 100%; max-width: 340px; display: flex; flex-direction: column; gap: 12px; }
+.login-box .logo { text-align: center; font-size: 28px; margin-bottom: 8px; }
+.login-box select, .login-box input { width: 100%; padding: 14px; border-radius: 12px; border: 1px solid #2A2A2D; background: #1A1A1C; color: #fff; font-size: 16px; font-family: inherit; }
+.login-box input { letter-spacing: 8px; text-align: center; }
+.login-box button { padding: 14px; border-radius: 12px; border: none; background: #2D6BFF; color: #fff; font-size: 16px; font-weight: 700; cursor: pointer; font-family: inherit; }
+.login-msg { font-size: 13px; color: #8A8A8E; text-align: center; min-height: 18px; }
+.login-msg.err { color: #FF453A; }
 .progress-bar { height: 3px; background: var(--border); border-radius: 2px; margin-top: 8px; }
 .progress-fill { height: 100%; background: var(--green); border-radius: 2px; transition: width 0.3s; }
 .list { padding: 12px 16px 100px; }
@@ -346,7 +366,9 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
       <div class="logo">DL<span>T</span>A</div>
       <div class="stats"><b id="calledCount">0</b> worked · <b id="totalCount">0</b> total</div>
     </div>
+    <div class="whoami" id="whoami"></div>
     <div class="source-picker" id="sourcePicker"></div>
+    <div class="source-picker" id="ownerPicker"></div>
     <div class="search-row">
       <input class="search-input" id="searchInput" placeholder="Search name, address, zip..." oninput="renderList()">
       <button class="lookup-btn" onclick="openLookup()">📞 Lookup</button>
@@ -364,11 +386,22 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
   </div>
 </div>
 
+<div id="loginView">
+  <div class="login-box">
+    <div class="logo">DL<span>T</span>A</div>
+    <select id="loginName"><option value="">Loading names...</option></select>
+    <input id="loginPin" type="password" inputmode="numeric" pattern="[0-9]*" maxlength="4" placeholder="PIN" autocomplete="current-password" onkeydown="if(event.key==='Enter')doLogin()">
+    <button id="loginBtn" onclick="doLogin()">Log in</button>
+    <div class="login-msg" id="loginMsg">First time? The 4-digit PIN you enter becomes yours.</div>
+  </div>
+</div>
+
 <div class="detail" id="detailView">
   <div class="detail-header">
     <button class="back-btn" onclick="closeDetail()">← Back</button>
     <div style="font-size:14px;color:var(--muted)" id="detailNav"></div>
   </div>
+  <div class="owner-bar" id="ownerBar"></div>
   <div class="detail-body" id="detailBody"></div>
 </div>
 
@@ -1008,19 +1041,17 @@ function showEmpty(msg) {
 
 function loadLeads() {
   document.getElementById('leadList').innerHTML = '<div class="loading"><div class="spinner"></div><div>Loading leads...</div></div>';
-  var url = 'https://sheets.googleapis.com/v4/spreadsheets/' + SHEET_ID + '/values/' + encodeURIComponent(currentSource) + '?key=' + API_KEY;
-  fetch(url)
-    .then(function(r) {
-      if (!r.ok) return r.json().then(function(e) { throw new Error(e.error.message); });
-      return r.json();
-    })
+  if (!SESSION) { showLogin(); return; }
+  api('leads', { sheet: currentSource })
     .then(function(data) {
-      var rows = data.values || [];
-      if (rows.length < 2) { showEmpty('No leads found in “' + sourceLabel(currentSource) + '.” This source is empty.'); return; }
-      var headers = rows[0];
+      if (!data.ok) throw new Error(data.error || 'Load failed');
+      var headers = data.headers || [];
+      var rows = data.rows || [];
+      if (!rows.length) { showEmpty('No leads found in “' + sourceLabel(currentSource) + '.” This source is empty.'); return; }
       leads = [];
-      for (var i = 1; i < rows.length; i++) {
-        var row = rows[i];
+      for (var i = 0; i < rows.length; i++) {
+        var row = rows[i].v;
+        var sheetRow = rows[i].n;
         // A duplicate header row pasted into the data renders as a junk lead
         // called "owner_name". Skip any row that is really a header.
         if (String(row[0] || '').trim() === 'lead_id') continue;
@@ -1041,7 +1072,9 @@ function loadLeads() {
         }
 
         leads.push({
-          row: i + 1,
+          row: sheetRow,
+          leadId: String(r.lead_id || ''),
+          assignedTo: String(r.assigned_to || '').trim(),
           name: String(r.owner_name || 'Unknown Owner').trim(),
           address: String(r.address_street || r.address_full || ''),
           city: String(r.address_city || r.city || ''),
@@ -1074,22 +1107,190 @@ function loadLeads() {
       renderList();
     })
     .catch(function(err) {
-      showError(err.message || 'Failed to load. Check API key and make sure the Sheet is shared publicly (View access).');
+      if (err && err.message === 'login_required') return;
+      showError((err && err.message) || 'Failed to load leads.');
     });
 }
 
-var APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbwHDX2GDqaGggMrXRSRntfBlsTCiOtRe1IHsEcSX2kr7XjagcE5IQJSZ1KPbJzFEc5-/exec';
+// ───────── Multi-user: login, ownership, API ─────────
+
+var SESSION = null;   // { token, name, role }
+var ownerView = 'mine';
+var AGENT_LIST = [];
+
+function loadSession() {
+  try {
+    var s = JSON.parse(localStorage.getItem('dlta_session') || 'null');
+    if (s && s.token && s.exp > Date.now()) return s;
+  } catch (e) {}
+  return null;
+}
+
+function storeSession(s) {
+  try { localStorage.setItem('dlta_session', JSON.stringify(s)); } catch (e) {}
+}
+
+function logout() {
+  try { localStorage.removeItem('dlta_session'); } catch (e) {}
+  SESSION = null;
+  leads = [];
+  closeDetail();
+  showLogin();
+}
+
+// POST as text/plain so the browser sends it without a CORS preflight.
+function api(action, data) {
+  var body = Object.assign({ action: action, token: SESSION ? SESSION.token : '' }, data || {});
+  return fetch(API_URL, { method: 'POST', body: JSON.stringify(body) })
+    .then(function(r) { return r.json(); })
+    .then(function(res) {
+      if (res && res.code === 401 && action !== 'login') {
+        logout();
+        throw new Error('login_required');
+      }
+      return res;
+    });
+}
+
+function showLogin() {
+  document.getElementById('loginView').classList.add('open');
+  var sel = document.getElementById('loginName');
+  api('agents').then(function(res) {
+    AGENT_LIST = (res && res.agents) || [];
+    var html = '<option value="">Who are you?</option>';
+    for (var i = 0; i < AGENT_LIST.length; i++) html += '<option>' + AGENT_LIST[i] + '</option>';
+    sel.innerHTML = html;
+  }).catch(function() {
+    sel.innerHTML = '<option value="">Could not reach the server</option>';
+  });
+}
+
+function doLogin() {
+  var name = document.getElementById('loginName').value;
+  var pin = document.getElementById('loginPin').value.trim();
+  var msg = document.getElementById('loginMsg');
+  msg.className = 'login-msg err';
+  if (!name) { msg.textContent = 'Pick your name.'; return; }
+  if (!/^\d{4}$/.test(pin)) { msg.textContent = 'PIN is 4 digits.'; return; }
+  document.getElementById('loginBtn').textContent = 'Checking...';
+  api('login', { name: name, pin: pin }).then(function(res) {
+    document.getElementById('loginBtn').textContent = 'Log in';
+    if (!res.ok) {
+      msg.textContent = res.error === 'locked_try_later' ? 'Too many tries. Wait 15 minutes.' : 'Wrong PIN.';
+      return;
+    }
+    SESSION = { token: res.token, name: res.name, role: res.role, exp: Date.now() + 11.5 * 3600 * 1000 };
+    storeSession(SESSION);
+    document.getElementById('loginPin').value = '';
+    msg.className = 'login-msg';
+    document.getElementById('loginView').classList.remove('open');
+    if (res.firstTime) alert('PIN set. Use it every time you log in.');
+    startApp();
+  }).catch(function() {
+    document.getElementById('loginBtn').textContent = 'Log in';
+    msg.textContent = 'Could not reach the server.';
+  });
+}
+
+function startApp() {
+  ownerView = 'mine';
+  if (!AGENT_LIST.length) api('agents').then(function(r) { AGENT_LIST = (r && r.agents) || []; });
+  renderWhoami();
+  renderOwnerPicker();
+  renderSourcePicker();
+  loadLeads();
+}
+
+function renderWhoami() {
+  document.getElementById('whoami').innerHTML = SESSION
+    ? '<span>Logged in as <b>' + SESSION.name + '</b>' + (SESSION.role === 'admin' ? ' (admin)' : '') + '</span><button onclick="logout()">Log out</button>'
+    : '';
+}
+
+function renderOwnerPicker() {
+  var views = [{ id: 'mine', label: 'My Leads' }, { id: 'pool', label: 'Pool' }];
+  if (SESSION && SESSION.role === 'admin') views.push({ id: 'all', label: 'All' });
+  var html = '';
+  for (var i = 0; i < views.length; i++) {
+    html += '<button class="source-seg ' + (ownerView === views[i].id ? 'active' : '') +
+      '" onclick="setOwnerView(\'' + views[i].id + '\')">' + views[i].label + '</button>';
+  }
+  document.getElementById('ownerPicker').innerHTML = html;
+}
+
+function setOwnerView(v) { ownerView = v; renderOwnerPicker(); renderList(); }
+
+function ownerMatches(l) {
+  if (ownerView === 'mine') return l.assignedTo === SESSION.name;
+  if (ownerView === 'pool') return !l.assignedTo;
+  return true;
+}
+
+function claimLead() {
+  var l = getLead(currentId);
+  if (!l) return;
+  api('claim', { sheet: currentSource, row: l.row, lead_id: l.leadId }).then(function(res) {
+    if (res.ok) { l.assignedTo = res.assigned_to; renderDetail(); renderList(); return; }
+    handleOwnershipError(res);
+  });
+}
+
+function assignLead(to) {
+  var l = getLead(currentId);
+  if (!l) return;
+  api('assign', { sheet: currentSource, row: l.row, lead_id: l.leadId, to: to }).then(function(res) {
+    if (res.ok) { l.assignedTo = res.assigned_to; renderDetail(); renderList(); return; }
+    handleOwnershipError(res);
+  });
+}
+
+function handleOwnershipError(res) {
+  if (res.error === 'already_owned' || res.error === 'owned_by_someone_else') {
+    alert('This lead belongs to ' + (res.owner || 'another agent') + '. Your change was not saved.');
+  } else if (res.error === 'row_moved_reload') {
+    alert('The lead list changed. Reloading.');
+  } else if (res.error === 'busy_try_again') {
+    alert('Server busy. Try again in a moment.');
+  } else {
+    alert('Could not save: ' + (res.error || 'unknown error'));
+  }
+  closeDetail();
+  loadLeads();
+}
+
+function renderOwnerBar() {
+  var bar = document.getElementById('ownerBar');
+  var l = getLead(currentId);
+  if (!l || !SESSION) { bar.innerHTML = ''; return; }
+  var html;
+  if (!l.assignedTo) html = 'Unclaimed. <button onclick="claimLead()">Claim this lead</button>';
+  else if (l.assignedTo === SESSION.name) html = '<b>Your lead</b>';
+  else html = 'Owned by <b>' + l.assignedTo + '</b>';
+  if (SESSION.role === 'admin') {
+    html += ' <select onchange="assignLead(this.value)"><option value="__">Assign to...</option><option value="">Nobody (pool)</option>';
+    for (var i = 0; i < AGENT_LIST.length; i++) html += '<option>' + AGENT_LIST[i] + '</option>';
+    html += '</select>';
+  }
+  bar.innerHTML = html;
+}
 
 function saveToSheet(row, updates) {
-  var params = new URLSearchParams();
-  params.append('action', 'update');
-  params.append('row', row);
-  params.append('updates', JSON.stringify(updates));
+  var l = getLead(row);
   // Name the tab the user is reading so every write lands on the same source.
-  // _row values come from currentSource's read, so the write must match it.
-  params.append('sheet', currentSource);
-  fetch(APPS_SCRIPT_URL + '?' + params.toString())
-    .catch(function(e) { console.error('Save error:', e); });
+  api('save', { sheet: currentSource, row: row, lead_id: l ? l.leadId : '', updates: updates })
+    .then(function(res) {
+      if (res.ok) {
+        if (l && l.assignedTo !== res.assigned_to) { l.assignedTo = res.assigned_to; renderList(); }
+        if (currentId === row) renderOwnerBar();
+        return;
+      }
+      handleOwnershipError(res);
+    })
+    .catch(function(e) {
+      if (e && e.message === 'login_required') return;
+      console.error('Save error:', e);
+      alert('Save failed. Check your connection and try again.');
+    });
 }
 
 function fmt(num) {
@@ -1145,6 +1346,7 @@ function renderList() {
   var filtered = [];
   for (var i = 0; i < leads.length; i++) {
     var l = leads[i];
+    if (!ownerMatches(l)) continue;
     if (hideOld && !q && isStale(l)) continue;
     if (activeTab === 'nos' && l.leadCategory !== 'NOS') continue;
     if (activeTab === 'lp' && l.leadCategory !== 'LP') continue;
@@ -1183,7 +1385,9 @@ function renderList() {
   }
   document.getElementById('countLabel').textContent = filtered.length + ' lead' + (filtered.length !== 1 ? 's' : '');
   if (!filtered.length) {
-    document.getElementById('leadList').innerHTML = '<div class="empty">No leads found</div>';
+    document.getElementById('leadList').innerHTML = ownerView === 'mine' && !q
+      ? '<div class="empty">No leads of yours yet.<br>Open the Pool and claim some.</div>'
+      : '<div class="empty">No leads found</div>';
     return;
   }
   var html = '';
@@ -1204,6 +1408,7 @@ function renderList() {
       auctionTag = '<span class="' + tagClass + '">🔨 ' + l.saleDate + (daysOut <= 14 ? ' (' + daysOut + 'd)' : '') + '</span>';
     }
     var textTag = l.textSent ? '<span class="text-sent-tag">💬 Texted</span>' : '';
+    if (ownerView === 'all' && l.assignedTo) textTag += '<span class="owner-tag">' + l.assignedTo + '</span>';
     var dimmed = l.status === 'notinterested' || l.status === 'dnc';
     html += '<div class="lead-card ' + (dimmed ? 'dimmed' : '') + '" onclick="openDetail(' + l.row + ')">';
     html += '<div class="lead-name"><div class="dot ' + (DOT[l.status] || 'dot-new') + '"></div>' + l.name + '</div>';
@@ -1486,8 +1691,12 @@ function doLookup() {
   document.getElementById('lookupResult').innerHTML = html;
 }
 
-renderSourcePicker();
-loadLeads();
+// Show who owns the open lead (and Claim / Assign) on every detail render.
+var _renderDetailBase = renderDetail;
+renderDetail = function() { _renderDetailBase(); renderOwnerBar(); };
+
+SESSION = loadSession();
+if (SESSION) startApp(); else { renderSourcePicker(); showLogin(); }
 </script>
 
 <script>
