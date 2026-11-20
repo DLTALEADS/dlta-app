@@ -1663,7 +1663,8 @@ function bestTextNumber(l) {
 // Resolves {agent_name} from AGENT_NAME, {company_name} from COMPANY_NAME,
 // {first_name} from owner_name (first word), and {address} from address_street.
 function resolveTemplate(body, l) {
-  body = body.split('{agent_name}').join(AGENT_NAME);
+  // Texts sign with the logged-in agent's name, not a hardcoded one.
+  body = body.split('{agent_name}').join((SESSION && SESSION.name) || AGENT_NAME);
   body = body.split('{company_name}').join(COMPANY_NAME);
   var firstName = (l && l.name) ? l.name.split(' ')[0] : '';
   if (firstName) body = body.split('{first_name}').join(firstName);
