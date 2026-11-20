@@ -26,6 +26,13 @@ var SEED_AGENTS = [
 // Fields the dialer is allowed to write. Anything else in "updates" is ignored.
 var WRITABLE = ['notes', 'call_status', 'lead_status', 'follow_up_date', 'next_action',
   'best_phone_number', 'text_sent', 'text_sent_timestamp'];
+var APPT_TAB = 'appointments';
+var APPT_HEADERS = ['appt_id', 'agent', 'sheet', 'lead_row', 'lead_id', 'lead_name', 'type', 'title',
+  'start', 'end', 'notes', 'created_at'];
+// Missed follow-ups go back to the pool after this many days with no call.
+var FOLLOWUP_GRACE_DAYS = 3;
+// Claimed but never called: back to the pool after this many days.
+var CLAIM_IDLE_DAYS = 7;
 var TOKEN_HOURS = 12;
 var MAX_BAD_PINS = 5;
 var LOCKOUT_SECONDS = 15 * 60;
@@ -52,6 +59,14 @@ function setup() {
     a.appendRow(AGENT_HEADERS);
     SEED_AGENTS.forEach(function (r) { a.appendRow(r); });
   }
+  if (!ss.getSheetByName(APPT_TAB)) {
+    ss.insertSheet(APPT_TAB).appendRow(APPT_HEADERS);
+  }
+  // Daily sweep that returns missed follow-ups to the pool (6am).
+  var hasSweep = ScriptApp.getProjectTriggers().some(function (t) {
+    return t.getHandlerFunction() === 'sweepOverdue';
+  });
+  if (!hasSweep) ScriptApp.newTrigger('sweepOverdue').timeBased().everyDays(1).atHour(6).create();
   var props = PropertiesService.getScriptProperties();
   if (!props.getProperty('TOKEN_SECRET')) {
     props.setProperty('TOKEN_SECRET', Utilities.getUuid() + Utilities.getUuid());
@@ -103,6 +118,9 @@ function route_(req) {
   if (action === 'leads') return readLeads_(user, req);
   if (action === 'claim') return withLock_(function () { return claim_(user, req); });
   if (action === 'save') return withLock_(function () { return save_(user, req); });
+  if (action === 'appts') return listAppts_(user);
+  if (action === 'addAppt') return withLock_(function () { return addAppt_(user, req); });
+  if (action === 'deleteAppt') return withLock_(function () { return deleteAppt_(user, req); });
   if (action === 'assign') {
     if (user.r !== 'admin') return { ok: false, code: 403, error: 'admin_only' };
     return withLock_(function () { return assign_(req); });
@@ -290,6 +308,116 @@ function assign_(req) {
   sh.getRange(r.row, r.col.assigned_to).setValue(to);
   sh.getRange(r.row, r.col.assigned_at).setValue(to ? new Date().toISOString() : '');
   return { ok: true, assigned_to: to };
+}
+
+// ───────────────────────── appointments ─────────────────────────
+
+function apptSheet_() {
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var sh = ss.getSheetByName(APPT_TAB);
+  if (!sh) { sh = ss.insertSheet(APPT_TAB); sh.appendRow(APPT_HEADERS); }
+  return sh;
+}
+
+function listAppts_(user) {
+  var rows = apptSheet_().getDataRange().getValues();
+  var out = [];
+  for (var i = 1; i < rows.length; i++) {
+    var r = rows[i];
+    if (!r[0]) continue;
+    if (user.r !== 'admin' && String(r[1]) !== user.n) continue;
+    var o = {};
+    APPT_HEADERS.forEach(function (h, j) {
+      var v = r[j];
+      o[h] = v instanceof Date ? v.toISOString() : v;
+    });
+    out.push(o);
+  }
+  return { ok: true, appts: out };
+}
+
+function addAppt_(user, req) {
+  var a = req.appt || {};
+  if (!a.start || !a.title) return { ok: false, code: 400, error: 'start_and_title_required' };
+  var id = Utilities.getUuid();
+  apptSheet_().appendRow([id, user.n, a.sheet || '', a.lead_row || '', a.lead_id || '', a.lead_name || '',
+    a.type || 'appointment', a.title, a.start, a.end || '', a.notes || '', new Date().toISOString()]);
+  return { ok: true, appt_id: id };
+}
+
+function deleteAppt_(user, req) {
+  var sh = apptSheet_();
+  var rows = sh.getDataRange().getValues();
+  for (var i = 1; i < rows.length; i++) {
+    if (String(rows[i][0]) !== String(req.appt_id)) continue;
+    if (user.r !== 'admin' && String(rows[i][1]) !== user.n) return { ok: false, code: 403, error: 'not_yours' };
+    sh.deleteRow(i + 1);
+    return { ok: true };
+  }
+  return { ok: false, code: 404, error: 'not_found' };
+}
+
+// ───────────────────────── missed follow-up sweep ─────────────────────────
+
+function toDate_(v) {
+  if (v instanceof Date) return isNaN(v.getTime()) ? null : v;
+  var s = String(v || '').trim();
+  if (!s) return null;
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) return new Date(+m[1], m[2] - 1, +m[3]);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return new Date(+m[3], m[1] - 1, +m[2]);
+  var d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Runs daily from the trigger setup() installs. Safe to run by hand too.
+// Returns leads to the pool when the owner let them go cold, and logs why.
+function sweepOverdue(nowOverride) {
+  var now = nowOverride ? new Date(nowOverride) : new Date();
+  var today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  var dueCutoff = new Date(today.getTime() - FOLLOWUP_GRACE_DAYS * 86400000);
+  var idleCutoff = new Date(now.getTime() - CLAIM_IDLE_DAYS * 86400000);
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var returned = [];
+  LEAD_TABS.forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    var values = sh.getDataRange().getValues();
+    var h = values[0].map(String);
+    var c = {};
+    h.forEach(function (x, i) { c[x] = i; });
+    if (c.assigned_to === undefined) return;
+    for (var i = 1; i < values.length; i++) {
+      var row = values[i];
+      var owner = String(row[c.assigned_to] || '').trim();
+      if (!owner) continue;
+      var status = String(row[c.lead_status] || '').toLowerCase();
+      if (status === 'listed' || status === 'dnc') continue;
+      var fu = toDate_(row[c.follow_up_date]);
+      var lastCall = toDate_(row[c.last_called_at]);
+      var claimed = toDate_(row[c.assigned_at]);
+      var reason = '';
+      if (fu && fu < dueCutoff && (!lastCall || lastCall < fu)) {
+        reason = 'follow-up missed (was due ' + Utilities.formatDate(fu, Session.getScriptTimeZone(), 'M/d/yyyy') + ')';
+      } else if (!lastCall && claimed && claimed < idleCutoff) {
+        reason = 'claimed ' + CLAIM_IDLE_DAYS + '+ days with no call';
+      }
+      if (!reason) continue;
+      var r = i + 1;
+      sh.getRange(r, c.assigned_to + 1).setValue('');
+      sh.getRange(r, c.assigned_at + 1).setValue('');
+      if (c.notes !== undefined) {
+        var entry = Utilities.formatDate(now, Session.getScriptTimeZone(), 'M/d/yyyy') +
+          '|returned|Back to pool from ' + owner + ': ' + reason;
+        var notes = String(row[c.notes] || '');
+        sh.getRange(r, c.notes + 1).setValue(notes ? notes + '|||' + entry : entry);
+      }
+      returned.push(owner + ': ' + (row[c.owner_name] || row[c.lead_id] || ('row ' + r)) + ' (' + reason + ')');
+    }
+  });
+  console.log('sweepOverdue returned ' + returned.length + ' lead(s)' + (returned.length ? ':\n' + returned.join('\n') : ''));
+  return returned;
 }
 
 // ───────────────────────── helpers ─────────────────────────

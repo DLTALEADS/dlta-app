@@ -89,6 +89,11 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .pill-dnc { background: #1a0808; color: var(--red); border: 1px solid var(--red); }
 .pill-listed { background: #1a0a1f; color: #a855f7; border: 1px solid #a855f7; }
 .followup-tag { font-size: 11px; color: var(--yellow); }
+.followup-tag.overdue { color: #FF453A; font-weight: 700; }
+.followup-tag.today { color: #FF9F0A; font-weight: 700; }
+.dl-toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #1A1A1C; border: 1px solid #2D6BFF; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 10000; box-shadow: 0 6px 24px rgba(0,0,0,.5); max-width: 90vw; text-align: center; }
+.cal-allday { font-size: 11px; padding: 2px 6px; margin: 2px 0; border-radius: 6px; background: #1a1200; color: #FF9F0A; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cal-allday.overdue { background: #2a0e0e; color: #FF453A; }
 .auction-tag { font-size: 11px; color: #f87171; font-weight: 700; background: #1a0808; border: 1px solid #7f1d1d; border-radius: 8px; padding: 2px 7px; }
 .auction-tag.soon { color: #fbbf24; background: #1a1200; border-color: #d97706; }
 .text-sent-tag { font-size: 11px; color: #4ade80; background: #0a1f0a; border: 1px solid #16a34a44; border-radius: 8px; padding: 2px 7px; }
@@ -948,6 +953,7 @@ var PILL = { new:'pill-new', called:'pill-called', callback:'pill-callback', app
 var PILL_LABEL = { new:'New', called:'Called', callback:'Callback', appointment:'Appt Set', notinterested:'Not Int.', dnc:'DNC', listed:'Listed' };
 var TABS = [
   { key:'all', label:'All' },
+  { key:'due', label:'⏰ Due' },
   { key:'nos', label:'🔨 NOS' },
   { key:'lp', label:'⚖️ LP' },
   { key:'new', label:'🔵 New' },
@@ -993,6 +999,65 @@ function toggleHideOld() {
   }
   renderList();
 }
+// ───────── Follow-ups ─────────
+// Every disposition sets the next follow-up date automatically. Agents can
+// still change it in the lead. A future date the agent already picked is kept.
+var FOLLOWUP_RULES = { called: 1, callback: 2, notinterested: 60, 'door knock': 3, 'mail sent': 7, 'letter sent': 7, text: 2 };
+var FOLLOWUP_CLEAR = { dnc: true, listed: true };
+var pickDueTab = false;
+
+function isoDate(v) {
+  var s = String(v || '').split('T')[0].trim();
+  var m = /^(\d{4})-(\d{1,2})-(\d{1,2})$/.exec(s);
+  if (m) return m[1] + '-' + ('0' + m[2]).slice(-2) + '-' + ('0' + m[3]).slice(-2);
+  m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(s);
+  if (m) return m[3] + '-' + ('0' + m[1]).slice(-2) + '-' + ('0' + m[2]).slice(-2);
+  return '';
+}
+function isoOf(d) { return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2); }
+function todayIso() { return isoOf(new Date()); }
+function addDaysIso(n, skipWeekend) {
+  var d = new Date();
+  d.setDate(d.getDate() + n);
+  if (skipWeekend) { while (d.getDay() === 0 || d.getDay() === 6) d.setDate(d.getDate() + 1); }
+  return isoOf(d);
+}
+function nextFollowUp(l, key) {
+  if (FOLLOWUP_CLEAR[key]) return '';
+  var days = FOLLOWUP_RULES[key];
+  if (!days) return l.followUp;
+  if (l.followUp && l.followUp > todayIso()) return l.followUp;
+  return addDaysIso(days, days <= 3);
+}
+function isDue(l) { return !!l.followUp && l.followUp <= todayIso() && !FOLLOWUP_CLEAR[l.status]; }
+function fmtShort(iso) {
+  if (!iso) return '';
+  var p = iso.split('-');
+  var d = new Date(+p[0], p[1] - 1, +p[2]);
+  return ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()] + ' ' + (d.getMonth() + 1) + '/' + d.getDate();
+}
+function dueCount() {
+  if (!SESSION) return 0;
+  var n = 0;
+  for (var i = 0; i < leads.length; i++) if (ownerMatches(leads[i]) && isDue(leads[i])) n++;
+  return n;
+}
+function toast(msg) {
+  var t = document.createElement('div');
+  t.className = 'dl-toast';
+  t.textContent = msg;
+  document.body.appendChild(t);
+  setTimeout(function() { if (t.parentNode) t.parentNode.removeChild(t); }, 2600);
+}
+// Applies the follow-up rule for a disposition. Returns fields to save.
+function applyFollowUp(l, key) {
+  var fu = nextFollowUp(l, key);
+  if (fu === l.followUp) return {};
+  l.followUp = fu;
+  toast(fu ? 'Next follow-up: ' + fmtShort(fu) + '. Change it anytime in the lead.' : 'Follow-up cleared.');
+  return { follow_up_date: fu };
+}
+
 var STATUSES = [
   {key:'new',label:'🔵 New'},
   {key:'called',label:'📞 Called'},
@@ -1085,7 +1150,7 @@ function loadLeads() {
           status: normalizeStatus(r.lead_status || r.call_status),
           notes: String(r.notes || ''),
           bestPhone: String(r.best_phone_number || ''),
-          followUp: String(r.follow_up_date || '').split('T')[0],
+          followUp: isoDate(r.follow_up_date),
           nextAction: String(r.next_action || ''),
           source: String(r.source || ''),
           leadType: String(r.lead_type || ''),
@@ -1103,6 +1168,7 @@ function loadLeads() {
       // hide the Sale Date sort rather than offer a button that does nothing.
       var sb = document.getElementById('sortBtn');
       if (sb) sb.style.display = leads.some(function(l) { return l.saleDate; }) ? '' : 'none';
+      if (pickDueTab) { pickDueTab = false; if (dueCount() > 0) activeTab = 'due'; }
       renderTabs();
       renderList();
     })
@@ -1194,6 +1260,7 @@ function doLogin() {
 
 function startApp() {
   ownerView = 'mine';
+  pickDueTab = true;
   if (!AGENT_LIST.length) api('agents').then(function(r) { AGENT_LIST = (r && r.agents) || []; });
   renderWhoami();
   renderOwnerPicker();
@@ -1303,7 +1370,9 @@ function renderTabs() {
   var html = '';
   for (var i = 0; i < TABS.length; i++) {
     var t = TABS[i];
-    html += '<div class="tab ' + (activeTab === t.key ? 'active' : '') + '" onclick="setTab(\'' + t.key + '\')">' + t.label + '</div>';
+    var lbl = t.label;
+    if (t.key === 'due') { var dc = dueCount(); if (dc) lbl += ' ' + dc; }
+    html += '<div class="tab ' + (activeTab === t.key ? 'active' : '') + '" onclick="setTab(\'' + t.key + '\')">' + lbl + '</div>';
   }
   document.getElementById('tabBar').innerHTML = html;
 }
@@ -1342,6 +1411,7 @@ function toggleSaleSort() {
 }
 
 function renderList() {
+  renderTabs();
   var q = document.getElementById('searchInput').value.toLowerCase();
   var filtered = [];
   for (var i = 0; i < leads.length; i++) {
@@ -1350,7 +1420,8 @@ function renderList() {
     if (hideOld && !q && isStale(l)) continue;
     if (activeTab === 'nos' && l.leadCategory !== 'NOS') continue;
     if (activeTab === 'lp' && l.leadCategory !== 'LP') continue;
-    if (activeTab !== 'all' && activeTab !== 'nos' && activeTab !== 'lp' && l.status !== activeTab) continue;
+    if (activeTab === 'due' && !isDue(l)) continue;
+    if (activeTab !== 'all' && activeTab !== 'due' && activeTab !== 'nos' && activeTab !== 'lp' && l.status !== activeTab) continue;
     if (q) {
       var hay = (l.name + ' ' + l.address + ' ' + l.city + ' ' + l.zip).toLowerCase();
       var phoneStr = '';
@@ -1379,6 +1450,10 @@ function renderList() {
       return d !== 0 ? d : b.row - a.row;
     });
   }
+  if (activeTab === 'due') {
+    // Most overdue first.
+    filtered.sort(function(a, b) { return a.followUp < b.followUp ? -1 : a.followUp > b.followUp ? 1 : 0; });
+  }
   if (sortMode === 'saledate') {
     filtered.sort(function(a, b) {
       var parseDate = function(d) {
@@ -1391,7 +1466,9 @@ function renderList() {
   }
   document.getElementById('countLabel').textContent = filtered.length + ' lead' + (filtered.length !== 1 ? 's' : '');
   if (!filtered.length) {
-    document.getElementById('leadList').innerHTML = ownerView === 'mine' && !q
+    document.getElementById('leadList').innerHTML = activeTab === 'due' && !q
+      ? '<div class="empty">Nothing due. You are caught up.</div>'
+      : ownerView === 'mine' && !q
       ? '<div class="empty">No leads of yours yet.<br>Open the Pool and claim some.</div>'
       : '<div class="empty">No leads found</div>';
     return;
@@ -1404,7 +1481,9 @@ function renderList() {
       var p = l.phones[j];
       chips += '<span class="chip ' + (p.dnc ? 'dnc' : '') + '">' + fmt(p.number) + '</span>';
     }
-    var fu = l.followUp ? '<span class="followup-tag">📅 ' + l.followUp + '</span>' : '';
+    var fuCls = !l.followUp ? '' : l.followUp < todayIso() ? ' overdue' : l.followUp === todayIso() ? ' today' : '';
+    var fuTxt = !l.followUp ? '' : l.followUp < todayIso() ? 'Overdue ' + fmtShort(l.followUp) : l.followUp === todayIso() ? 'Due today' : fmtShort(l.followUp);
+    var fu = l.followUp && !FOLLOWUP_CLEAR[l.status] ? '<span class="followup-tag' + fuCls + '">📅 ' + fuTxt + '</span>' : '';
     var auctionTag = '';
     if (l.saleDate) {
       var saleParts = l.saleDate.split('/');
@@ -1523,7 +1602,7 @@ function renderDetail() {
   html += '<div class="best-row"><input class="best-input" id="bestPhoneInput" type="tel" placeholder="Confirmed best number" value="' + l.bestPhone + '"><button class="best-call" onclick="dialBest()">📞</button></div>';
   html += '<div class="section-label">All Numbers</div>' + phonesHtml;
   html += '<div class="section-label">Status</div><div class="status-grid">' + statusHtml + '</div>';
-  html += '<div class="section-label">Follow-Up Date</div><input class="field-input" type="date" id="followupInput" value="' + l.followUp + '">';
+  html += '<div class="section-label">Follow-Up Date <span style="text-transform:none;font-weight:400">(set automatically, change anytime)</span></div><input class="field-input" type="date" id="followupInput" value="' + l.followUp + '">';
   html += '<div class="section-label">Next Action</div><input class="field-input" type="text" id="nextActionInput" placeholder="e.g. Call back Thursday 2pm" value="' + l.nextAction + '">';
   html += '<div class="section-label">Call Notes</div><textarea class="field-input" id="notesInput" placeholder="Seller situation, motivation, objections..."></textarea>';
   html += '<button class="save-btn" id="saveBtn" onclick="saveDetail()">💾 Save & Log Call</button>';
@@ -1602,7 +1681,9 @@ function pickTemplate(c, m) {
     var ts = new Date().toISOString().split('T')[0];
     l.textSent = true;
     l.textSentTimestamp = ts;
-    saveToSheet(currentId, { text_sent: 'TRUE', text_sent_timestamp: ts });
+    var tu = applyFollowUp(l, 'text');
+    tu.text_sent = 'TRUE'; tu.text_sent_timestamp = ts;
+    saveToSheet(currentId, tu);
     renderDetail();
   }
 }
@@ -1623,14 +1704,18 @@ function logTouch(type) {
   var entry = now + '|' + type + '|' + type + ' logged';
   var updated = l.notes ? l.notes + '|||' + entry : entry;
   l.notes = updated;
-  saveToSheet(currentId, { notes: updated, call_status: type });
+  var u = applyFollowUp(l, type);
+  u.notes = updated; u.call_status = type;
+  saveToSheet(currentId, u);
   renderDetail();
 }
 
 function setStatus(key) {
   var l = getLead(currentId);
-  if (l) l.status = key;
-  saveToSheet(currentId, { lead_status: key, call_status: key });
+  var u = {};
+  if (l) { l.status = key; u = applyFollowUp(l, key); }
+  u.lead_status = key; u.call_status = key;
+  saveToSheet(currentId, u);
   renderDetail();
 }
 
@@ -1642,6 +1727,12 @@ function saveDetail() {
   var l = getLead(currentId);
   var notes = document.getElementById('notesInput').value.trim();
   var followUp = document.getElementById('followupInput').value;
+  // Agent did not pick a date: apply the rule for this call.
+  if (l && followUp === l.followUp) {
+    var fuKey = l.status === 'new' ? 'called' : l.status;
+    var auto = nextFollowUp(l, fuKey);
+    if (auto !== followUp) { followUp = auto; toast(auto ? 'Next follow-up: ' + fmtShort(auto) + '.' : 'Follow-up cleared.'); }
+  }
   var nextAction = document.getElementById('nextActionInput').value;
   var bestPhone = document.getElementById('bestPhoneInput').value;
   var now = new Date().toLocaleDateString();
@@ -2257,12 +2348,18 @@ function _calLeadFollowups() {
   var evs = [];
   for (var i = 0; i < arr.length; i++) {
     var l = arr[i];
-    if (!l.followUp) continue;
+    if (!l.followUp || FOLLOWUP_CLEAR[l.status]) continue;
+    if (typeof SESSION !== 'undefined' && SESSION) {
+      if (SESSION.role === 'admin' ? !l.assignedTo : l.assignedTo !== SESSION.name) continue;
+    }
     var ms = _parseDateMs(l.followUp);
     if (isNaN(ms)) continue;
+    var who = SESSION && SESSION.role === 'admin' && l.assignedTo !== SESSION.name ? ' (' + l.assignedTo + ')' : '';
     evs.push({
       id: 'lead-fu-' + l.row,
-      title: l.nextAction ? l.nextAction : 'Follow up: ' + l.name,
+      allDay: true,
+      overdue: l.followUp < todayIso(),
+      title: (l.nextAction ? l.nextAction : 'Call ' + l.name) + who,
       start: new Date(ms),
       end: null,
       type: 'followup',
@@ -2298,10 +2395,24 @@ function _calRangeEnd() {
 function calFetchEvents() {
   calError = '';
   if (!ESPO_API_KEY) {
-    // No API key — show lead follow-ups only
-    calEvents = _calLeadFollowups();
-    calLoading = false;
+    // Appointments live in the Sheet (appointments tab) via the dialer API.
+    calLoading = true;
     _renderCalBody();
+    api('appts').then(function(res) {
+      if (!res || !res.ok) throw new Error((res && res.error) || 'load failed');
+      calEvents = (res.appts || []).map(function(a) {
+        var who = SESSION && SESSION.role === 'admin' && a.agent !== SESSION.name ? ' (' + a.agent + ')' : '';
+        return { id: a.appt_id, title: a.title + who, start: new Date(a.start), end: a.end ? new Date(a.end) : null,
+          type: a.type || 'appointment', leadRow: a.lead_row ? Number(a.lead_row) : null, source: 'sheet' };
+      }).concat(_calLeadFollowups());
+    }).catch(function(err) {
+      if (err && err.message === 'login_required') return;
+      calError = 'Could not load appointments';
+      calEvents = _calLeadFollowups();
+    }).then(function() {
+      calLoading = false;
+      _renderCalBody();
+    });
     return;
   }
   calLoading = true;
@@ -2407,7 +2518,7 @@ function _renderCalBody() {
     return;
   }
   var errorHtml = calError
-    ? '<div class="cal-error-banner">EspoCRM: ' + _esc(calError) + ' — showing lead follow-ups only.</div>'
+    ? '<div class="cal-error-banner">' + _esc(calError) + '. Showing lead follow-ups only.</div>'
     : '';
   var viewHtml = '';
   if (calView === 'month') viewHtml = _renderMonthView();
@@ -2439,7 +2550,7 @@ function _renderMonthView() {
       var evs = _calEventsForDate(ds);
       for (var ei = 0; ei < Math.min(evs.length, 3); ei++) {
         var ev = evs[ei];
-        html += '<div class="cal-pill ' + (CAL_PILL_CLASS[ev.type] || 'cal-pill-appt') + '">' + _esc(ev.title) + '</div>';
+        html += '<div class="cal-pill ' + (CAL_PILL_CLASS[ev.type] || 'cal-pill-appt') + '"' + (ev.overdue ? ' style="color:#FF453A"' : '') + '>' + _esc(ev.title) + '</div>';
       }
       if (evs.length > 3) html += '<div class="cal-pill" style="color:#8A8A8E">+' + (evs.length - 3) + ' more</div>';
       html += '</div>';
@@ -2473,7 +2584,12 @@ function _renderWeekView() {
     var hi = ds === today ? 'color:#2D6BFF' : '';
     html += '<div class="cal-wk-head" style="' + hi + '">' + CAL_DAYS_MED[dd.getDay()] + '<br>' + CAL_MONTHS_SHORT[dd.getMonth()] + '&nbsp;' + dd.getDate() + '</div>';
   }
-  // Time rows 7 AM – 9 PM
+  html += '<div class="cal-wk-time">Due</div>';
+  for (var d = 0; d < 7; d++) {
+    var dd = new Date(ws); dd.setDate(dd.getDate() + d);
+    html += '<div class="cal-wk-slot">' + _calAllDayHtml(_calEventsForDate(_dateStr(dd))) + '</div>';
+  }
+  // Time rows 7 AM - 9 PM
   for (var h = 7; h <= 21; h++) {
     var hLabel = (h > 12 ? (h - 12) : (h === 12 ? 12 : h)) + (h >= 12 ? 'P' : 'A');
     html += '<div class="cal-wk-time">' + hLabel + '</div>';
@@ -2484,8 +2600,8 @@ function _renderWeekView() {
       var evs = _calEventsForDate(ds);
       for (var ei = 0; ei < evs.length; ei++) {
         var ev = evs[ei];
-        if (ev.start && ev.start.getHours() === h) {
-          html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+        if (!ev.allDay && ev.start && ev.start.getHours() === h) {
+          html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '"' + _calOpenAttr(ev) + '>'
             + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
             + '<div class="cal-event-time">' + _fmtTime(ev.start) + '</div></div>';
         }
@@ -2502,11 +2618,13 @@ function _renderDayView() {
   var ds = _dateStr(calDate);
   var dayEvs = _calEventsForDate(ds);
   var html = '<div style="padding:0 4px">';
-  var hasAny = false;
+  var allDay = _calAllDayHtml(dayEvs);
+  var hasAny = !!allDay;
+  if (allDay) html += '<div class="cal-day-row"><div class="cal-day-time">Due</div><div class="cal-day-events">' + allDay + '</div></div>';
   for (var h = 7; h <= 21; h++) {
     var slotEvs = [];
     for (var i = 0; i < dayEvs.length; i++) {
-      if (dayEvs[i].start && dayEvs[i].start.getHours() === h) slotEvs.push(dayEvs[i]);
+      if (!dayEvs[i].allDay && dayEvs[i].start && dayEvs[i].start.getHours() === h) slotEvs.push(dayEvs[i]);
     }
     // Only render slots that have events (or show a placeholder row for every hour)
     var hLabel = (h > 12 ? (h - 12) : (h === 12 ? 12 : h)) + ':00 ' + (h >= 12 ? 'PM' : 'AM');
@@ -2514,16 +2632,33 @@ function _renderDayView() {
     for (var ei = 0; ei < slotEvs.length; ei++) {
       var ev = slotEvs[ei];
       hasAny = true;
-      html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '">'
+      html += '<div class="cal-event-card ' + (CAL_CARD_CLASS[ev.type] || 'appt') + '"' + _calOpenAttr(ev) + '>'
         + '<div class="cal-event-name">' + _esc(ev.title) + '</div>'
-        + '<div class="cal-event-time">' + _fmtTime(ev.start) + (ev.end ? ' – ' + _fmtTime(ev.end) : '') + '</div>'
+        + '<div class="cal-event-time">' + _fmtTime(ev.start) + (ev.end ? ' to ' + _fmtTime(ev.end) : '') + '</div>'
         + '</div>';
     }
     html += '</div></div>';
   }
-  if (!hasAny) html += '<div class="cal-state">No events — tap + to add one</div>';
+  if (!hasAny) html += '<div class="cal-state">Nothing scheduled. Tap + to add one.</div>';
   html += '</div>';
   return html;
+}
+
+function _calAllDayHtml(evs) {
+  var out = '';
+  for (var i = 0; i < evs.length; i++) {
+    if (!evs[i].allDay) continue;
+    out += '<div class="cal-allday' + (evs[i].overdue ? ' overdue' : '') + '"' + _calOpenAttr(evs[i]) + '>' + _esc(evs[i].title) + '</div>';
+  }
+  return out;
+}
+function _calOpenAttr(ev) {
+  return ev.leadRow ? ' onclick="event.stopPropagation();calOpenLead(' + ev.leadRow + ')"' : '';
+}
+function calOpenLead(row) {
+  if (!getLead(row)) { alert('That lead is not in your list right now.'); return; }
+  showTab('leads');
+  openDetail(row);
 }
 
 // ── Add Appointment Modal ─────────────────────────────────────────────────────
@@ -2605,13 +2740,33 @@ function calSaveAppt() {
   }
 
   if (!ESPO_API_KEY) {
-    // No key — save locally and update calendar; inform user
-    btn.textContent = '✅ Saved locally';
-    errEl.textContent = 'EspoCRM API key not set — event stored locally only (won\'t sync to CRM).';
-    errEl.style.color = '#FF9F0A';
-    errEl.style.display = 'block';
-    if (activeScreen === 'calendar') _renderCalBody();
-    setTimeout(function() { calCloseApptModal(); errEl.style.color = '#FF453A'; }, 2000);
+    btn.textContent = 'Saving...';
+    btn.disabled = true;
+    var apptLead = _apptLeadRow ? getLead(_apptLeadRow) : null;
+    var apptType = _apptType;
+    api('addAppt', { appt: {
+      title: title, start: startDt.toISOString(), end: endDt.toISOString(), type: apptType, notes: notes,
+      sheet: currentSource, lead_row: apptLead ? apptLead.row : '', lead_id: apptLead ? apptLead.leadId : '',
+      lead_name: apptLead ? apptLead.name : ''
+    } }).then(function(res) {
+      if (!res || !res.ok) throw new Error((res && res.error) || 'Save failed');
+      localEv.id = res.appt_id;
+      localEv.source = 'sheet';
+      if (apptLead && apptType === 'appointment') {
+        apptLead.status = 'appointment';
+        apptLead.followUp = _dateStr(startDt);
+        saveToSheet(apptLead.row, { lead_status: 'appointment', call_status: 'appointment', follow_up_date: apptLead.followUp });
+      }
+      btn.textContent = '✅ Saved!';
+      if (activeScreen === 'calendar') _renderCalBody();
+      setTimeout(calCloseApptModal, 900);
+    }).catch(function(err) {
+      calEvents = calEvents.filter(function(e) { return e.id !== localId; });
+      btn.textContent = '💾 Save Appointment';
+      btn.disabled = false;
+      errEl.textContent = err.message === 'login_required' ? 'Log in again to save.' : err.message;
+      errEl.style.display = 'block';
+    });
     return;
   }
 

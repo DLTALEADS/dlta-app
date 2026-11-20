@@ -42,6 +42,20 @@ owns each lead.
   or send it back to the pool, from the lead screen.
 - New Landvoice rows arrive with the 4 new columns blank, so they land in Pool.
 
+## Follow-ups and the daily sweep
+
+- Every disposition sets the next follow-up date (called: next business day,
+  callback: 2 business days, text: 2, door knock: 3, mail or letter: 7,
+  not interested: 60, DNC or listed: cleared). Agents can change it anytime.
+- The Due tab shows follow-ups due today or overdue, most overdue first, and
+  opens first at login when anything is due.
+- `sweepOverdue` runs every morning at 6am (setup installs the trigger). It
+  sends a lead back to the Pool when its follow-up is 3+ days overdue with no
+  call, or when it was claimed 7+ days ago and never called. It writes the
+  reason into the lead's call history. Change FOLLOWUP_GRACE_DAYS or
+  CLAIM_IDLE_DAYS at the top of Code.gs to adjust.
+- Appointments are saved in the "appointments" tab and show on the calendar.
+
 ## Updating the script later
 
 Deploy > Manage deployments > pencil icon > Version: New version > Deploy.
