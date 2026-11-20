@@ -56,6 +56,20 @@ owns each lead.
   CLAIM_IDLE_DAYS at the top of Code.gs to adjust.
 - Appointments are saved in the "appointments" tab and show on the calendar.
 
+## Drip
+
+- Claiming a lead (or working a pool lead, or an admin assigning it) starts
+  the drip. Steps, counted in days from the claim: 0 text, 2 call, 4 text with
+  infographic, 7 postcard, 10 text, 14 call, 21 text, 30 postcard, 45 text.
+- Text steps wait in the agent's queue ("drip texts ready" card on My Leads).
+  Send opens Messages with the text filled in and moves the lead to its next
+  step. Texts only go out 9am to 8pm.
+- Call steps set the follow-up date so the lead shows in Due. Postcard steps
+  add the address to the "mailers" tab for the monthly batch.
+- The drip stops when the lead becomes Appt Set, Not Interested, DNC, Listed
+  or Referred, or goes back to the Pool. Edit DRIP_STEPS and DRIP_TEXTS at the
+  top of Code.gs to change timing or wording.
+
 ## Updating the script later
 
 Deploy > Manage deployments > pencil icon > Version: New version > Deploy.

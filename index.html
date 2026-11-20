@@ -91,6 +91,20 @@ body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; background: v
 .followup-tag { font-size: 11px; color: var(--yellow); }
 .followup-tag.overdue { color: #FF453A; font-weight: 700; }
 .followup-tag.today { color: #FF9F0A; font-weight: 700; }
+.drip-banner { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #0F1A35; border: 1px solid #2D6BFF; border-radius: 12px; padding: 12px 14px; margin: 0 0 10px; font-size: 14px; color: #fff; cursor: pointer; }
+.drip-banner b { color: #7FA6FF; }
+.drip-banner span.go { background: #2D6BFF; border-radius: 8px; padding: 6px 12px; font-weight: 700; font-size: 13px; }
+#dripModal { position: fixed; inset: 0; background: rgba(0,0,0,.7); z-index: 9998; display: none; align-items: flex-end; justify-content: center; }
+#dripModal.open { display: flex; }
+.drip-sheet { background: #13131a; width: 100%; max-width: 560px; max-height: 85vh; overflow-y: auto; border-radius: 18px 18px 0 0; padding: 16px; }
+.drip-item { background: #1a1a24; border: 1px solid #2a2a38; border-radius: 12px; padding: 12px; margin-bottom: 10px; }
+.drip-item .who { font-weight: 700; color: #fff; font-size: 14px; }
+.drip-item .addr { font-size: 12px; color: #8A8A8E; margin-bottom: 6px; }
+.drip-item .txt { font-size: 13px; color: #C7C7CC; background: #0F1A35; border-radius: 10px; padding: 8px 10px; margin-bottom: 8px; line-height: 1.4; word-break: break-word; }
+.drip-item .btns { display: flex; gap: 8px; }
+.drip-item button { flex: 1; padding: 9px; border-radius: 10px; border: none; font-weight: 700; font-family: inherit; font-size: 13px; cursor: pointer; }
+.drip-send { background: #2D6BFF; color: #fff; }
+.drip-skip { background: #2A2A2E; color: #8A8A8E; }
 .dl-toast { position: fixed; left: 50%; bottom: 96px; transform: translateX(-50%); background: #1A1A1C; border: 1px solid #2D6BFF; color: #fff; padding: 10px 16px; border-radius: 12px; font-size: 14px; z-index: 10000; box-shadow: 0 6px 24px rgba(0,0,0,.5); max-width: 90vw; text-align: center; }
 .cal-allday { font-size: 11px; padding: 2px 6px; margin: 2px 0; border-radius: 6px; background: #1a1200; color: #FF9F0A; cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .cal-allday.overdue { background: #2a0e0e; color: #FF453A; }
@@ -386,8 +400,20 @@ textarea.field-input { min-height: 110px; resize: none; line-height: 1.6; }
     <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
   </div>
   <div class="list">
+    <div id="dripBanner"></div>
     <div class="count-label" id="countLabel"></div>
     <div id="leadList"><div class="loading"><div class="spinner"></div><div>Loading leads...</div></div></div>
+  </div>
+</div>
+
+<div id="dripModal" onclick="if(event.target===this)closeDrip()">
+  <div class="drip-sheet">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <div style="font-size:17px;font-weight:800;color:#fff">💬 Drip texts</div>
+      <button onclick="closeDrip()" style="background:none;border:none;color:#8A8A8E;font-size:15px;cursor:pointer">Close</button>
+    </div>
+    <div id="dripNote" style="font-size:12px;color:#8A8A8E;margin-bottom:12px"></div>
+    <div id="dripList"></div>
   </div>
 </div>
 
@@ -1074,6 +1100,61 @@ function scheduleFollowUpTime(l, date, time) {
   });
 }
 
+// ───────── Drip queue (texts the drip has ready for this agent today) ─────────
+var DRIP_QUEUE = [];
+function dripHoursOk() { var h = new Date().getHours(); return h >= 9 && h < 20; }
+function loadDripQueue() {
+  if (!SESSION) return;
+  api('dripQueue').then(function(res) {
+    DRIP_QUEUE = (res && res.ok && res.items) || [];
+    renderDripBanner();
+    if (document.getElementById('dripModal').classList.contains('open')) renderDripList();
+  }).catch(function() {});
+}
+function renderDripBanner() {
+  var el = document.getElementById('dripBanner');
+  if (!el) return;
+  if (!SESSION || ownerView !== 'mine' || !DRIP_QUEUE.length) { el.innerHTML = ''; return; }
+  el.innerHTML = '<div class="drip-banner" onclick="openDrip()"><div>💬 <b>' + DRIP_QUEUE.length + '</b> drip text' +
+    (DRIP_QUEUE.length === 1 ? '' : 's') + ' ready to send</div><span class="go">Send</span></div>';
+}
+function openDrip() { renderDripList(); document.getElementById('dripModal').classList.add('open'); }
+function closeDrip() { document.getElementById('dripModal').classList.remove('open'); }
+function _escH(s) { return String(s || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+function renderDripList() {
+  var ok = dripHoursOk();
+  document.getElementById('dripNote').textContent = ok
+    ? 'Tap Send to open Messages with the text ready. Each lead moves to its next step after you send.'
+    : 'Drip texts go out between 9am and 8pm. These will wait until then.';
+  if (!DRIP_QUEUE.length) { document.getElementById('dripList').innerHTML = '<div class="empty">All caught up.</div>'; return; }
+  var html = '';
+  for (var i = 0; i < DRIP_QUEUE.length; i++) {
+    var it = DRIP_QUEUE[i];
+    html += '<div class="drip-item"><div class="who">' + _escH(it.name) + '</div><div class="addr">' + _escH(it.address) + ' · ' + fmt(it.phone) + '</div>' +
+      '<div class="txt">' + _escH(it.text) + '</div><div class="btns">' +
+      '<button class="drip-send" ' + (ok ? '' : 'disabled style="opacity:.4"') + ' onclick="dripSend(' + i + ')">Send</button>' +
+      '<button class="drip-skip" onclick="dripSkip(' + i + ')">Skip</button></div></div>';
+  }
+  document.getElementById('dripList').innerHTML = html;
+}
+function _dripDone(i, sent) {
+  var it = DRIP_QUEUE[i];
+  if (!it) return null;
+  DRIP_QUEUE.splice(i, 1);
+  api(sent ? 'dripSent' : 'dripSkip', { sheet: it.sheet, row: it.row, lead_id: it.lead_id, step: it.step, text: it.text });
+  var l = it.sheet === currentSource ? getLead(it.row) : null;
+  if (l && sent) { l.textSent = true; }
+  renderDripBanner();
+  renderDripList();
+  return it;
+}
+function dripSend(i) {
+  if (!dripHoursOk()) return;
+  var it = _dripDone(i, true);
+  if (it) window.location.href = 'sms:' + it.phone + '&body=' + encodeURIComponent(it.text);
+}
+function dripSkip(i) { _dripDone(i, false); }
+
 function isDue(l) { return !!l.followUp && l.followUp <= todayIso() && !FOLLOWUP_CLEAR[l.status]; }
 function fmtShort(iso) {
   if (!iso) return '';
@@ -1217,6 +1298,7 @@ function loadLeads() {
       renderTabs();
       renderList();
       loadFollowUpTimes();
+      loadDripQueue();
     })
     .catch(function(err) {
       if (err && err.message === 'login_required') return;
@@ -1343,7 +1425,7 @@ function claimLead() {
   var l = getLead(currentId);
   if (!l) return;
   api('claim', { sheet: currentSource, row: l.row, lead_id: l.leadId }).then(function(res) {
-    if (res.ok) { l.assignedTo = res.assigned_to; renderDetail(); renderList(); return; }
+    if (res.ok) { l.assignedTo = res.assigned_to; renderDetail(); renderList(); loadDripQueue(); toast('Claimed. The drip has started for this lead.'); return; }
     handleOwnershipError(res);
   });
 }
@@ -1393,7 +1475,7 @@ function saveToSheet(row, updates) {
   api('save', { sheet: currentSource, row: row, lead_id: l ? l.leadId : '', updates: updates })
     .then(function(res) {
       if (res.ok) {
-        if (l && l.assignedTo !== res.assigned_to) { l.assignedTo = res.assigned_to; renderList(); }
+        if (l && l.assignedTo !== res.assigned_to) { l.assignedTo = res.assigned_to; renderList(); loadDripQueue(); }
         if (currentId === row) renderOwnerBar();
         return;
       }
@@ -1513,6 +1595,7 @@ function renderList() {
       return parseDate(a.saleDate) - parseDate(b.saleDate);
     });
   }
+  renderDripBanner();
   document.getElementById('countLabel').textContent = filtered.length + ' lead' + (filtered.length !== 1 ? 's' : '');
   if (!filtered.length) {
     document.getElementById('leadList').innerHTML = activeTab === 'due' && !q

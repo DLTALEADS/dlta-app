@@ -33,6 +33,54 @@ var APPT_HEADERS = ['appt_id', 'agent', 'sheet', 'lead_row', 'lead_id', 'lead_na
 var FOLLOWUP_GRACE_DAYS = 3;
 // Claimed but never called: back to the pool after this many days.
 var CLAIM_IDLE_DAYS = 7;
+// ───── Drip: claim a lead and this sequence runs on its own ─────
+var DRIP_COLS = ['drip_start', 'drip_step', 'drip_next', 'drip_status'];
+// day = days after the claim. text steps wait in the agent's send queue;
+// call steps put the lead in Due; mail steps add it to the postcard list.
+var DRIP_STEPS = [
+  { day: 0, ch: 'text', msg: 'intro' },
+  { day: 2, ch: 'call' },
+  { day: 4, ch: 'text', msg: 'guide' },
+  { day: 7, ch: 'mail' },
+  { day: 10, ch: 'text', msg: 'calls' },
+  { day: 14, ch: 'call' },
+  { day: 21, ch: 'text', msg: 'options' },
+  { day: 30, ch: 'mail' },
+  { day: 45, ch: 'text', msg: 'checkin' }
+];
+// Short, one bubble each. Wording rotates so texts are not identical.
+var DRIP_TEXTS = {
+  intro: [
+    'Hi, this is {agent} with Delta Realty. I saw a court filing on {address}. I help homeowners understand their options. Open to a quick call?',
+    'Hi, {agent} here with Delta Realty, a local brokerage. Reaching out about {address}. If you are weighing options, I can help. Call or text anytime.',
+    'Hi, this is {agent} at Delta Realty. I help local homeowners after a foreclosure filing. Happy to answer any questions about {address}.'
+  ],
+  guide: [
+    '{agent} from Delta Realty. Here is a 1-page guide to what this filing means for {address} and your options: {image}',
+    'Quick guide for {address}: what the filing means, your timeline and options. Questions? Text me. {agent} {image}'
+  ],
+  calls: [
+    'You are probably getting a lot of calls about {address}. If anyone can help you keep the home or sell on your terms, it is us. {agent}, Delta Realty',
+    'I know the calls and letters pile up. No pressure from me on {address}, just straight answers when you want them. {agent}, Delta Realty'
+  ],
+  options: [
+    'Options for {address} can include catching up, a loan change, a sale, or legal help. I can point you to the right one. {agent}, Delta Realty',
+    'Not sure where to start on {address}? Step one is knowing your numbers and timeline. I can help with both. {agent}, Delta Realty'
+  ],
+  checkin: [
+    'Checking in on {address}. Still here if you need help or a referral. Reply STOP and I will not text again. {agent}, Delta Realty',
+    'Hi, {agent} with Delta Realty again. Anything changed with {address}? Happy to help whenever you are ready. Reply STOP to opt out.'
+  ]
+};
+var DRIP_IMAGES = {
+  LP: 'https://app.dltaleads.com/assets/sms/lis_pendens_infographic.png',
+  NOS: 'https://app.dltaleads.com/assets/sms/lis_pendens_vs_notice_of_sale.png'
+};
+// Statuses that end the drip.
+var DRIP_STOP = ['appointment', 'notinterested', 'dnc', 'listed', 'referred'];
+var MAILERS_TAB = 'mailers';
+var MAILER_HEADERS = ['added_at', 'agent', 'sheet', 'lead_row', 'lead_id', 'owner_name', 'address_street',
+  'address_city', 'address_state', 'address_zip', 'drip_step', 'mailed'];
 var TOKEN_HOURS = 12;
 var MAX_BAD_PINS = 5;
 var LOCKOUT_SECONDS = 15 * 60;
@@ -47,7 +95,7 @@ function setup() {
     var lastCol = sh.getLastColumn();
     var headers = sh.getRange(1, 1, 1, lastCol).getValues()[0].map(String);
     var col = lastCol;
-    OWNER_COLS.forEach(function (h) {
+    OWNER_COLS.concat(DRIP_COLS).forEach(function (h) {
       if (headers.indexOf(h) === -1) {
         col++;
         sh.getRange(1, col).setValue(h);
@@ -58,6 +106,23 @@ function setup() {
     var a = ss.insertSheet(AGENTS_TAB);
     a.appendRow(AGENT_HEADERS);
     SEED_AGENTS.forEach(function (r) { a.appendRow(r); });
+  }
+  // Leads claimed before the drip existed get their drip started now.
+  LEAD_TABS.forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    var values = sh.getDataRange().getValues();
+    var col = {};
+    values[0].map(String).forEach(function (h, i) { col[h] = i + 1; });
+    if (!col.drip_status || !col.assigned_to) return;
+    for (var i = 1; i < values.length; i++) {
+      var st = String(values[i][col.lead_status - 1] || '').toLowerCase();
+      if (String(values[i][col.assigned_to - 1] || '').trim() && !String(values[i][col.drip_status - 1] || '') &&
+          DRIP_STOP.indexOf(st) === -1) dripStart_(sh, i + 1, col);
+    }
+  });
+  if (!ss.getSheetByName(MAILERS_TAB)) {
+    ss.insertSheet(MAILERS_TAB).appendRow(MAILER_HEADERS);
   }
   if (!ss.getSheetByName(APPT_TAB)) {
     ss.insertSheet(APPT_TAB).appendRow(APPT_HEADERS);
@@ -118,6 +183,9 @@ function route_(req) {
   if (action === 'leads') return readLeads_(user, req);
   if (action === 'claim') return withLock_(function () { return claim_(user, req); });
   if (action === 'save') return withLock_(function () { return save_(user, req); });
+  if (action === 'dripQueue') return withLock_(function () { return dripQueue_(user, req); });
+  if (action === 'dripSent') return withLock_(function () { return dripMark_(user, req, true); });
+  if (action === 'dripSkip') return withLock_(function () { return dripMark_(user, req, false); });
   if (action === 'appts') return listAppts_(user);
   if (action === 'addAppt') return withLock_(function () { return addAppt_(user, req); });
   if (action === 'deleteAppt') return withLock_(function () { return deleteAppt_(user, req); });
@@ -271,6 +339,7 @@ function claim_(user, req) {
   if (!r.owner) {
     sh.getRange(r.row, r.col.assigned_to).setValue(user.n);
     sh.getRange(r.row, r.col.assigned_at).setValue(new Date().toISOString());
+    dripStart_(sh, r.row, r.col);
   }
   return { ok: true, assigned_to: user.n };
 }
@@ -289,11 +358,14 @@ function save_(user, req) {
     owner = user.n;
     sh.getRange(r.row, r.col.assigned_to).setValue(owner);
     sh.getRange(r.row, r.col.assigned_at).setValue(now);
+    dripStart_(sh, r.row, r.col);
   }
   var updates = req.updates || {};
   Object.keys(updates).forEach(function (k) {
     if (WRITABLE.indexOf(k) !== -1 && r.col[k]) sh.getRange(r.row, r.col[k]).setValue(updates[k]);
   });
+  var st = String(updates.lead_status || '').toLowerCase();
+  if (st && DRIP_STOP.indexOf(st) !== -1) dripStop_(sh, r.row, r.col);
   sh.getRange(r.row, r.col.last_called_by).setValue(user.n);
   sh.getRange(r.row, r.col.last_called_at).setValue(now);
   return { ok: true, assigned_to: owner };
@@ -307,7 +379,163 @@ function assign_(req) {
   if (to && listAgents_().agents.indexOf(to) === -1) return { ok: false, code: 400, error: 'unknown_agent' };
   sh.getRange(r.row, r.col.assigned_to).setValue(to);
   sh.getRange(r.row, r.col.assigned_at).setValue(to ? new Date().toISOString() : '');
+  if (to && to !== r.owner) dripStart_(sh, r.row, r.col);
+  if (!to) dripStop_(sh, r.row, r.col);
   return { ok: true, assigned_to: to };
+}
+
+// ───────────────────────── drip ─────────────────────────
+
+function isoDay_(d) {
+  return d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+}
+function addDays_(d, n) { var x = new Date(d.getFullYear(), d.getMonth(), d.getDate()); x.setDate(x.getDate() + n); return x; }
+
+// col is 1-based (getRow_ style). Silently does nothing until setup() adds the drip columns.
+function dripStart_(sh, row, col) {
+  if (!col.drip_status) return;
+  var now = new Date();
+  sh.getRange(row, col.drip_start).setValue(now.toISOString());
+  sh.getRange(row, col.drip_step).setValue(0);
+  sh.getRange(row, col.drip_next).setValue(isoDay_(now));
+  sh.getRange(row, col.drip_status).setValue('active');
+}
+function dripStop_(sh, row, col) {
+  if (!col.drip_status) return;
+  if (String(sh.getRange(row, col.drip_status).getValues()[0][0]) === 'active') {
+    sh.getRange(row, col.drip_status).setValue('stopped');
+  }
+}
+
+function fill_(tpl, v) {
+  return tpl.replace(/\{(\w+)\}/g, function (m, k) { return v[k] !== undefined ? v[k] : ''; }).replace(/\s+/g, ' ').trim();
+}
+
+// Moves a lead past call and mail steps that are due, so only text steps wait.
+// vals/c are 0-based (getValues row + header index map). Returns the current step or null.
+function dripCatchUp_(sh, row, vals, c, agent, sheetName, today) {
+  var guard = 0;
+  while (guard++ < DRIP_STEPS.length) {
+    var stepIdx = Number(vals[c.drip_step]);
+    var step = DRIP_STEPS[stepIdx];
+    var next = toDate_(vals[c.drip_next]);
+    if (!step) { sh.getRange(row, c.drip_status + 1).setValue('done'); vals[c.drip_status] = 'done'; return null; }
+    if (!next || next > today) return null;
+    if (step.ch === 'text') return step;
+    if (step.ch === 'call') {
+      var fu = isoDay_(next);
+      var cur = c.follow_up_date !== undefined ? toDate_(vals[c.follow_up_date]) : null;
+      // Never push back a sooner follow-up the agent already set.
+      if (c.follow_up_date !== undefined && (!cur || cur > next || cur < today)) {
+        sh.getRange(row, c.follow_up_date + 1).setValue(fu); vals[c.follow_up_date] = fu;
+      }
+      dripNote_(sh, row, vals, c, 'drip', 'Drip: call day ' + fu);
+    } else if (step.ch === 'mail') {
+      var m = SpreadsheetApp.openById(SHEET_ID).getSheetByName(MAILERS_TAB);
+      if (m) m.appendRow([new Date().toISOString(), agent, sheetName, row, vals[c.lead_id] || '', vals[c.owner_name] || '',
+        vals[c.address_street] || vals[c.address_full] || '', vals[c.address_city] || '', vals[c.address_state] || '',
+        vals[c.address_zip] || '', stepIdx, '']);
+      dripNote_(sh, row, vals, c, 'drip', 'Drip: added to postcard list');
+    }
+    dripAdvance_(sh, row, vals, c, stepIdx);
+  }
+  return null;
+}
+
+function dripAdvance_(sh, row, vals, c, stepIdx) {
+  var nextIdx = stepIdx + 1;
+  sh.getRange(row, c.drip_step + 1).setValue(nextIdx);
+  vals[c.drip_step] = nextIdx;
+  if (nextIdx >= DRIP_STEPS.length) {
+    sh.getRange(row, c.drip_status + 1).setValue('done');
+    vals[c.drip_status] = 'done';
+    return;
+  }
+  var start = toDate_(vals[c.drip_start]) || new Date();
+  var due = addDays_(start, DRIP_STEPS[nextIdx].day);
+  var today = addDays_(new Date(), 0);
+  if (due < today) due = today;
+  sh.getRange(row, c.drip_next + 1).setValue(isoDay_(due));
+  vals[c.drip_next] = isoDay_(due);
+}
+
+function dripNote_(sh, row, vals, c, type, text) {
+  if (c.notes === undefined) return;
+  var entry = Utilities.formatDate(new Date(), Session.getScriptTimeZone(), 'M/d/yyyy') + '|' + type + '|' + text;
+  var notes = String(vals[c.notes] || '');
+  notes = notes ? notes + '|||' + entry : entry;
+  sh.getRange(row, c.notes + 1).setValue(notes);
+  vals[c.notes] = notes;
+}
+
+function bestPhone_(vals, c) {
+  var p = String(vals[c.best_phone_number] || '').replace(/\D/g, '');
+  if (p.length >= 10) return p;
+  for (var j = 1; j <= 5; j++) {
+    p = String(vals[c['phone_' + j]] || '').replace(/\.0$/, '').replace(/\D/g, '');
+    if (p.length >= 10) return p;
+  }
+  return '';
+}
+
+// The agent's texts due today (admin can pass agent to see someone else's).
+function dripQueue_(user, req) {
+  var agent = user.r === 'admin' && req.agent ? String(req.agent) : user.n;
+  var ss = SpreadsheetApp.openById(SHEET_ID);
+  var today = addDays_(new Date(), 0);
+  var items = [];
+  LEAD_TABS.forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    var values = sh.getDataRange().getValues();
+    var c = {};
+    values[0].map(String).forEach(function (h, i) { c[h] = i; });
+    if (c.drip_status === undefined) return;
+    for (var i = 1; i < values.length; i++) {
+      var v = values[i];
+      if (String(v[c.assigned_to] || '').trim() !== agent) continue;
+      if (String(v[c.drip_status]) !== 'active') continue;
+      var step = dripCatchUp_(sh, i + 1, v, c, agent, name, today);
+      if (!step) continue;
+      var phone = bestPhone_(v, c);
+      if (!phone) continue;
+      var variants = DRIP_TEXTS[step.msg] || [''];
+      var type = String(v[c.lead_type] || '').toUpperCase() === 'NOS' ? 'NOS' : 'LP';
+      var text = fill_(variants[(i + Number(v[c.drip_step])) % variants.length], {
+        agent: agent, address: String(v[c.address_street] || v[c.address_full] || 'your property'),
+        image: DRIP_IMAGES[type]
+      });
+      items.push({ sheet: name, row: i + 1, lead_id: v[c.lead_id] || '', name: v[c.owner_name] || '',
+        address: v[c.address_street] || v[c.address_full] || '', phone: phone, step: Number(v[c.drip_step]),
+        msg: step.msg, text: text });
+    }
+  });
+  return { ok: true, agent: agent, items: items };
+}
+
+// Marks a queued text as sent (or skipped) and moves the lead to its next step.
+function dripMark_(user, req, sent) {
+  var sh = leadSheet_(req.sheet);
+  var r = getRow_(sh, req);
+  if (r.err) return r.err;
+  if (r.owner !== user.n && user.r !== 'admin') return { ok: false, code: 403, error: 'owned_by_someone_else', owner: r.owner };
+  if (!r.col.drip_status) return { ok: false, code: 400, error: 'run_setup' };
+  var c = {};
+  Object.keys(r.col).forEach(function (k) { c[k] = r.col[k] - 1; });
+  var vals = r.vals;
+  if (String(vals[c.drip_status]) !== 'active' || Number(vals[c.drip_step]) !== Number(req.step)) {
+    return { ok: false, code: 409, error: 'step_already_handled' };
+  }
+  var now = new Date().toISOString();
+  if (sent) {
+    if (c.text_sent !== undefined) sh.getRange(r.row, c.text_sent + 1).setValue('TRUE');
+    if (c.text_sent_timestamp !== undefined) sh.getRange(r.row, c.text_sent_timestamp + 1).setValue(now.slice(0, 10));
+    dripNote_(sh, r.row, vals, c, 'text', 'Drip text sent: ' + String(req.text || '').slice(0, 300));
+  } else {
+    dripNote_(sh, r.row, vals, c, 'drip', 'Drip text skipped');
+  }
+  dripAdvance_(sh, r.row, vals, c, Number(vals[c.drip_step]));
+  return { ok: true, next: vals[c.drip_next] || '', status: vals[c.drip_status] };
 }
 
 // ───────────────────────── appointments ─────────────────────────
@@ -407,6 +635,7 @@ function sweepOverdue(nowOverride) {
       var r = i + 1;
       sh.getRange(r, c.assigned_to + 1).setValue('');
       sh.getRange(r, c.assigned_at + 1).setValue('');
+      if (c.drip_status !== undefined) sh.getRange(r, c.drip_status + 1).setValue('stopped');
       if (c.notes !== undefined) {
         var entry = Utilities.formatDate(now, Session.getScriptTimeZone(), 'M/d/yyyy') +
           '|returned|Back to pool from ' + owner + ': ' + reason;
@@ -414,6 +643,20 @@ function sweepOverdue(nowOverride) {
         sh.getRange(r, c.notes + 1).setValue(notes ? notes + '|||' + entry : entry);
       }
       returned.push(owner + ': ' + (row[c.owner_name] || row[c.lead_id] || ('row ' + r)) + ' (' + reason + ')');
+    }
+  });
+  // Move drip leads past call and mail days even if the agent has not opened the app.
+  var today0 = addDays_(now, 0);
+  LEAD_TABS.forEach(function (name) {
+    var sh = ss.getSheetByName(name);
+    if (!sh || sh.getLastRow() < 2) return;
+    var values = sh.getDataRange().getValues();
+    var c = {};
+    values[0].map(String).forEach(function (x, i) { c[x] = i; });
+    if (c.drip_status === undefined) return;
+    for (var i = 1; i < values.length; i++) {
+      var owner = String(values[i][c.assigned_to] || '').trim();
+      if (owner && String(values[i][c.drip_status]) === 'active') dripCatchUp_(sh, i + 1, values[i], c, owner, name, today0);
     }
   });
   console.log('sweepOverdue returned ' + returned.length + ' lead(s)' + (returned.length ? ':\n' + returned.join('\n') : ''));
