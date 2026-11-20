@@ -1869,10 +1869,25 @@ var _goalInputs = {
   splitPct: 0.7,         // your share of the gross
   workDays: 21,          // calling days per month
   dialsPerDay: 80,       // your current dial capacity per day
-  contactRate: 0.25,     // assumed until live data
-  apptRate: 0.30,        // assumed until live data
-  closeRate: 0.20        // assumed until live data
+  // Starting points for distressed-seller calling. Each agent can adjust.
+  contactRate: 0.10,     // dials that reach a person
+  apptRate: 0.10,        // conversations that book an appointment
+  closeRate: 0.40,       // appointments that sign a listing
+  listCloseRate: 0.70    // signed listings that close
 };
+var GOAL_DEFAULTS = JSON.parse(JSON.stringify(_goalInputs));
+
+// Each agent's goal settings are remembered on their device.
+function _goalKey() { return 'dlta_goals_' + ((typeof SESSION !== 'undefined' && SESSION && SESSION.name) || 'anon'); }
+function loadGoalInputs() {
+  var base = JSON.parse(JSON.stringify(GOAL_DEFAULTS));
+  try {
+    var saved = JSON.parse(localStorage.getItem(_goalKey()) || 'null');
+    if (saved) for (var k in base) if (typeof saved[k] === 'number' && !isNaN(saved[k])) base[k] = saved[k];
+  } catch (e) {}
+  _goalInputs = base;
+}
+function storeGoalInputs() { try { localStorage.setItem(_goalKey(), JSON.stringify(_goalInputs)); } catch (e) {} }
 
 window.DLTA = window.DLTA || {};
 window.DLTA.adapter = {
@@ -1922,6 +1937,7 @@ window.DLTA.adapter = {
       for (var k in patch) {
         if (_goalInputs.hasOwnProperty(k) && typeof patch[k] === 'number' && !isNaN(patch[k])) {
           _goalInputs[k] = patch[k];
+          storeGoalInputs();
         }
       }
     }
@@ -2082,6 +2098,7 @@ function _sliderCard(id, label, value, min, max, step, disp, assumed) {
 function renderGoals() {
   var body = document.getElementById('goalsBody');
   if (!body) return;
+  loadGoalInputs();
   var g = window.DLTA.adapter.getGoalInputs();
   var html = '';
 
@@ -2093,7 +2110,12 @@ function renderGoals() {
     + '<div class="dl-stat-row" style="margin-top:14px">'
     + '<div class="dl-stat"><div class="dl-stat-num blue" id="goalDeals">0</div><div class="dl-stat-cap">Deals per month</div></div>'
     + '<div class="dl-stat"><div class="dl-stat-num blue" id="goalProj">$0</div><div class="dl-stat-cap">Projected income</div></div>'
-    + '</div></div>';
+    + '</div>'
+    + '<div class="dl-card-label" style="margin-top:14px">What your goal takes each month</div>'
+    + '<div id="goalFunnel" style="font-size:13px;line-height:1.9;color:#C7C7CC"></div>'
+    + '</div>';
+
+  html += _myNumbersCard();
 
   html += _sliderCard('targetIncome', 'Monthly income target', g.targetIncome, 1000, 50000, 500, _money(g.targetIncome), false);
   html += _sliderCard('avgCommission', 'Avg commission per deal', g.avgCommission, 1000, 30000, 500, _money(g.avgCommission), false);
@@ -2102,7 +2124,9 @@ function renderGoals() {
   html += _sliderCard('dialsPerDay', 'Your dials per day capacity', g.dialsPerDay, 10, 400, 10, String(g.dialsPerDay), false);
   html += _sliderCard('contactRate', 'Contact rate', Math.round(g.contactRate * 100), 1, 100, 1, Math.round(g.contactRate * 100) + '%', true);
   html += _sliderCard('apptRate', 'Contact to appointment', Math.round(g.apptRate * 100), 1, 100, 1, Math.round(g.apptRate * 100) + '%', true);
-  html += _sliderCard('closeRate', 'Appointment to deal', Math.round(g.closeRate * 100), 1, 100, 1, Math.round(g.closeRate * 100) + '%', true);
+  html += _sliderCard('closeRate', 'Appointment to signed listing', Math.round(g.closeRate * 100), 1, 100, 1, Math.round(g.closeRate * 100) + '%', true);
+  html += _sliderCard('listCloseRate', 'Signed listing to closed deal', Math.round(g.listCloseRate * 100), 1, 100, 1, Math.round(g.listCloseRate * 100) + '%', true);
+  html += '<button class="dl-btn-ghost" style="width:100%;margin:4px 0 24px;padding:10px;border-radius:10px;border:1px solid #2A2A2D;background:none;color:#8A8A8E;font-family:inherit" onclick="resetGoals()">Reset to starting rates</button>';
 
   body.innerHTML = html;
   computeGoals();
@@ -2118,9 +2142,11 @@ function onGoalInput() {
     dialsPerDay: get('dialsPerDay'),
     contactRate: get('contactRate') / 100,
     apptRate: get('apptRate') / 100,
-    closeRate: get('closeRate') / 100
+    closeRate: get('closeRate') / 100,
+    listCloseRate: get('listCloseRate') / 100
   };
   window.DLTA.adapter.saveGoalInputs(p);
+  _setText('val_listCloseRate', Math.round(p.listCloseRate * 100) + '%');
   _setText('val_targetIncome', _money(p.targetIncome));
   _setText('val_avgCommission', _money(p.avgCommission));
   _setText('val_splitPct', Math.round(p.splitPct * 100) + '%');
@@ -2136,12 +2162,21 @@ function computeGoals() {
   var g = window.DLTA.adapter.getGoalInputs();
   var net = g.avgCommission * g.splitPct;
   var dealsNeeded = net > 0 ? g.targetIncome / net : 0;
-  var apptsNeeded = g.closeRate > 0 ? dealsNeeded / g.closeRate : 0;
+  var listingsNeeded = g.listCloseRate > 0 ? dealsNeeded / g.listCloseRate : 0;
+  var apptsNeeded = g.closeRate > 0 ? listingsNeeded / g.closeRate : 0;
   var contactsNeeded = g.apptRate > 0 ? apptsNeeded / g.apptRate : 0;
   var dialsMonth = g.contactRate > 0 ? contactsNeeded / g.contactRate : 0;
   var dialsDayNeeded = g.workDays > 0 ? dialsMonth / g.workDays : 0;
 
-  var projDeals = g.dialsPerDay * g.workDays * g.contactRate * g.apptRate * g.closeRate;
+  var projDeals = g.dialsPerDay * g.workDays * g.contactRate * g.apptRate * g.closeRate * g.listCloseRate;
+  var fmt1 = function (n) { return n >= 10 ? String(Math.round(n)) : String(Math.round(n * 10) / 10); };
+  var fEl = document.getElementById('goalFunnel');
+  if (fEl) fEl.innerHTML =
+    '<b>' + Math.ceil(dialsMonth) + '</b> dials (' + Math.ceil(dialsDayNeeded) + ' a day)<br>'
+    + '→ <b>' + fmt1(contactsNeeded) + '</b> conversations<br>'
+    + '→ <b>' + fmt1(apptsNeeded) + '</b> appointments<br>'
+    + '→ <b>' + fmt1(listingsNeeded) + '</b> signed listings<br>'
+    + '→ <b>' + fmt1(dealsNeeded) + '</b> closed deals = ' + _money(g.targetIncome);
   var projIncome = projDeals * net;
   var atGoal = g.targetIncome > 0 && projIncome >= g.targetIncome;
 
@@ -2164,6 +2199,36 @@ function computeGoals() {
       badge.innerHTML = '<span class="dl-badge blue">' + gap + ' more dials per day to reach goal</span>';
     }
   }
+}
+
+function resetGoals() {
+  _goalInputs = JSON.parse(JSON.stringify(GOAL_DEFAULTS));
+  storeGoalInputs();
+  renderGoals();
+}
+
+// The agent's real results from their own leads, for comparing to the sliders.
+function _myNumbersCard() {
+  var arr = (typeof leads !== 'undefined' && leads) ? leads : [];
+  var me = (typeof SESSION !== 'undefined' && SESSION) ? SESSION.name : '';
+  var worked = 0, talked = 0, appts = 0, listed = 0;
+  for (var i = 0; i < arr.length; i++) {
+    var l = arr[i];
+    if (me && l.assignedTo !== me) continue;
+    if (l.status === 'new') continue;
+    worked++;
+    if (l.status === 'callback' || l.status === 'appointment' || l.status === 'notinterested' || l.status === 'listed') talked++;
+    if (l.status === 'appointment' || l.status === 'listed') appts++;
+    if (l.status === 'listed') listed++;
+  }
+  var pct = function (a, b) { return b ? Math.round(a / b * 100) + '%' : 'n/a'; };
+  return '<div class="dl-card"><div class="dl-card-label">Your real numbers so far (your claimed leads)</div>'
+    + '<div style="font-size:13px;line-height:1.9;color:#C7C7CC">'
+    + '<b>' + worked + '</b> leads worked<br>'
+    + '<b>' + talked + '</b> talked to (' + pct(talked, worked) + ')<br>'
+    + '<b>' + appts + '</b> appointments (' + pct(appts, talked) + ' of conversations)<br>'
+    + '<b>' + listed + '</b> listed (' + pct(listed, appts) + ' of appointments)'
+    + '</div><div style="font-size:11px;color:#8A8A8E;margin-top:6px">Counted per lead, not per dial. Once you have 50+ leads worked, set the sliders close to these.</div></div>';
 }
 
 // Refresh Activity when the leads load completes while that tab is open.
